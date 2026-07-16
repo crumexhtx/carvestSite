@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Secrets
+.env
+config.json
+
+# Local persistent cache
+.cache/
+
+# IDE
+.vscode/
+.idea/
+
+# Frontend
+web/node_modules/
+web/.next/
+web/.env.local

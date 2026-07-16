@@ -1,0 +1,12 @@
+{
+    "make": "Toyota",
+    "year": 2020,
+    "model": "Camry",
+    "trim": "XLE",
+    "engine": "2.5L",
+    "transmission": "8-speed automatic",
+    "drivetrain": "Front-wheel drive",
+    "fuel_type": "Gasoline",
+    "warranty": "3-year/36,000-mile warranty",
+    "zip_code": "77087"
+}
