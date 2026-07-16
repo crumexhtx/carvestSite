@@ -1,0 +1,59 @@
+services:
+  - type: web
+    name: carvest-api
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api_server:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: MARKETCHECK_API_KEY
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: CACHE_BACKEND
+        value: upstash
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
+      - key: ASSISTANT_MARKET_LOOKUPS_WITHOUT_ZIP
+        value: "false"
+      - key: API_RATE_LIMIT_ENABLED
+        value: "true"
+      - key: MARKETCHECK_TIMEOUT_SECONDS
+        value: "12"
+      - key: MARKETCHECK_MAX_RETRIES
+        value: "2"
+      - key: ENVIRONMENT
+        value: production
+      - key: FRONTEND_URL
+        sync: false
+      # Soft launch: free tools only until traffic is steady.
+      - key: MONETIZATION_ENABLED
+        value: "false"
+      - key: WAITLIST_ENABLED
+        value: "true"
+      - key: BUYER_REPORT_PRICE_CENTS
+        value: "1900"
+      - key: REPORT_STORE_BACKEND
+        value: supabase
+      - key: REPORT_ACCESS_SECRET
+        sync: false
+      - key: REPORT_DEV_UNLOCK
+        value: "false"
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PRICE_ID
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: REPORT_EMAIL_FROM
+        sync: false

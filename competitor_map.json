@@ -1,0 +1,159 @@
+{
+    "models": {
+        "toyota|camry": {
+            "segment": "midsize_sedan",
+            "competitors": [
+                {"make": "Honda", "model": "Accord"},
+                {"make": "Nissan", "model": "Altima"},
+                {"make": "Hyundai", "model": "Sonata"},
+                {"make": "Kia", "model": "K5"}
+            ]
+        },
+        "honda|accord": {
+            "segment": "midsize_sedan",
+            "competitors": [
+                {"make": "Toyota", "model": "Camry"},
+                {"make": "Nissan", "model": "Altima"},
+                {"make": "Hyundai", "model": "Sonata"},
+                {"make": "Mazda", "model": "Mazda6"}
+            ]
+        },
+        "nissan|altima": {
+            "segment": "midsize_sedan",
+            "competitors": [
+                {"make": "Toyota", "model": "Camry"},
+                {"make": "Honda", "model": "Accord"},
+                {"make": "Hyundai", "model": "Sonata"},
+                {"make": "Kia", "model": "K5"}
+            ]
+        },
+        "hyundai|sonata": {
+            "segment": "midsize_sedan",
+            "competitors": [
+                {"make": "Toyota", "model": "Camry"},
+                {"make": "Honda", "model": "Accord"},
+                {"make": "Nissan", "model": "Altima"},
+                {"make": "Kia", "model": "K5"}
+            ]
+        },
+        "toyota|rav4": {
+            "segment": "compact_suv",
+            "competitors": [
+                {"make": "Honda", "model": "CR-V"},
+                {"make": "Nissan", "model": "Rogue"},
+                {"make": "Hyundai", "model": "Tucson"},
+                {"make": "Kia", "model": "Sportage"}
+            ]
+        },
+        "honda|cr-v": {
+            "segment": "compact_suv",
+            "competitors": [
+                {"make": "Toyota", "model": "RAV4"},
+                {"make": "Nissan", "model": "Rogue"},
+                {"make": "Hyundai", "model": "Tucson"},
+                {"make": "Mazda", "model": "CX-5"}
+            ]
+        },
+        "ford|explorer": {
+            "segment": "midsize_suv",
+            "competitors": [
+                {"make": "Toyota", "model": "Highlander"},
+                {"make": "Honda", "model": "Pilot"},
+                {"make": "Chevrolet", "model": "Traverse"},
+                {"make": "Hyundai", "model": "Palisade"}
+            ]
+        },
+        "toyota|corolla": {
+            "segment": "compact_sedan",
+            "competitors": [
+                {"make": "Honda", "model": "Civic"},
+                {"make": "Nissan", "model": "Sentra"},
+                {"make": "Hyundai", "model": "Elantra"},
+                {"make": "Mazda", "model": "Mazda3"}
+            ]
+        },
+        "honda|civic": {
+            "segment": "compact_sedan",
+            "competitors": [
+                {"make": "Toyota", "model": "Corolla"},
+                {"make": "Nissan", "model": "Sentra"},
+                {"make": "Hyundai", "model": "Elantra"},
+                {"make": "Mazda", "model": "Mazda3"}
+            ]
+        },
+        "ford|f-150": {
+            "segment": "fullsize_truck",
+            "competitors": [
+                {"make": "Chevrolet", "model": "Silverado 1500"},
+                {"make": "Ram", "model": "1500"},
+                {"make": "GMC", "model": "Sierra 1500"},
+                {"make": "Toyota", "model": "Tundra"}
+            ]
+        },
+        "toyota|tacoma": {
+            "segment": "midsize_truck",
+            "competitors": [
+                {"make": "Chevrolet", "model": "Colorado"},
+                {"make": "Ford", "model": "Ranger"},
+                {"make": "Nissan", "model": "Frontier"},
+                {"make": "Jeep", "model": "Gladiator"}
+            ]
+        },
+        "chevrolet|colorado": {
+            "segment": "midsize_truck",
+            "competitors": [
+                {"make": "Toyota", "model": "Tacoma"},
+                {"make": "Ford", "model": "Ranger"},
+                {"make": "Nissan", "model": "Frontier"},
+                {"make": "Jeep", "model": "Gladiator"}
+            ]
+        },
+        "ford|ranger": {
+            "segment": "midsize_truck",
+            "competitors": [
+                {"make": "Toyota", "model": "Tacoma"},
+                {"make": "Chevrolet", "model": "Colorado"},
+                {"make": "Nissan", "model": "Frontier"},
+                {"make": "Jeep", "model": "Gladiator"}
+            ]
+        }
+    },
+    "segments": {
+        "midsize_sedan": [
+            {"make": "Toyota", "model": "Camry"},
+            {"make": "Honda", "model": "Accord"},
+            {"make": "Nissan", "model": "Altima"},
+            {"make": "Hyundai", "model": "Sonata"}
+        ],
+        "compact_sedan": [
+            {"make": "Toyota", "model": "Corolla"},
+            {"make": "Honda", "model": "Civic"},
+            {"make": "Hyundai", "model": "Elantra"},
+            {"make": "Nissan", "model": "Sentra"}
+        ],
+        "compact_suv": [
+            {"make": "Toyota", "model": "RAV4"},
+            {"make": "Honda", "model": "CR-V"},
+            {"make": "Hyundai", "model": "Tucson"},
+            {"make": "Nissan", "model": "Rogue"}
+        ],
+        "midsize_suv": [
+            {"make": "Toyota", "model": "Highlander"},
+            {"make": "Honda", "model": "Pilot"},
+            {"make": "Ford", "model": "Explorer"},
+            {"make": "Chevrolet", "model": "Traverse"}
+        ],
+        "fullsize_truck": [
+            {"make": "Ford", "model": "F-150"},
+            {"make": "Chevrolet", "model": "Silverado 1500"},
+            {"make": "Ram", "model": "1500"},
+            {"make": "Toyota", "model": "Tundra"}
+        ],
+        "midsize_truck": [
+            {"make": "Toyota", "model": "Tacoma"},
+            {"make": "Chevrolet", "model": "Colorado"},
+            {"make": "Ford", "model": "Ranger"},
+            {"make": "Nissan", "model": "Frontier"}
+        ]
+    }
+}
