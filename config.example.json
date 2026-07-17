@@ -1,3 +1,10 @@
 {
-    "openai_api_key": "your-openai-api-key-here"
+  "_comment": "Carvest reads configuration from environment variables / .env (see .env.example). This file is intentionally unused by the application.",
+  "env_file": ".env",
+  "required_env": [
+    "OPENAI_API_KEY",
+    "MARKETCHECK_API_KEY",
+    "ALLOWED_ORIGINS",
+    "REPORT_ACCESS_SECRET"
+  ]
 }

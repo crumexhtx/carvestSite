@@ -13,6 +13,7 @@ import {
   type InventoryScale,
 } from "@/lib/api";
 import { DEFAULT_RELIABILITY_RANKINGS } from "@/lib/reliability-rankings";
+import { sanitizeExternalUrl } from "@/lib/safe-url";
 import { cn } from "@/lib/utils";
 
 type HomeTab = "search" | "recalls" | "reliability";
@@ -37,6 +38,13 @@ export function HomePageClient() {
   const [pendingPrompt, setPendingPrompt] = useState<string | null>(
     () => promptParam,
   );
+  const [trackedPromptParam, setTrackedPromptParam] = useState(promptParam);
+  if (promptParam !== trackedPromptParam) {
+    setTrackedPromptParam(promptParam);
+    if (promptParam) {
+      setPendingPrompt(promptParam);
+    }
+  }
 
   const clearPromptParam = useCallback(() => {
     if (!searchParams.get("prompt")) return;
@@ -59,12 +67,6 @@ export function HomePageClient() {
       .then(setInventory)
       .catch(() => setInventory(null));
   }, []);
-
-  useEffect(() => {
-    if (promptParam) {
-      setPendingPrompt(promptParam);
-    }
-  }, [promptParam]);
 
   const reliabilityRankings =
     insights?.reliability_rankings ?? DEFAULT_RELIABILITY_RANKINGS;
@@ -201,12 +203,15 @@ function ReliabilityPanel({
             </h2>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
-            {reports.map((report) => (
+            {reports.map((report) => {
+              const safeUrl = sanitizeExternalUrl(report.url);
+              if (!safeUrl) return null;
+              return (
               <a
-                key={report.url}
-                href={report.url}
+                key={safeUrl}
+                href={safeUrl}
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
                 className="group flex min-h-64 flex-col rounded-xl border border-border bg-gradient-to-br from-card to-card-subtle p-5 transition hover:-translate-y-0.5 hover:border-violet-300 hover:shadow-[var(--shadow-card)]"
               >
                 <p className="text-xs font-medium uppercase tracking-wide text-violet-600">
@@ -223,7 +228,8 @@ function ReliabilityPanel({
                   <ExternalLink className="h-4 w-4" />
                 </span>
               </a>
-            ))}
+              );
+            })}
           </div>
         </section>
       ) : null}

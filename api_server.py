@@ -28,6 +28,7 @@ from feedback_store import FeedbackError, submit_feedback
 from listing_deal_service import ListingDealError, evaluate_listing_deal
 from negotiation import generate_negotiation_pack
 from offer_sheet_service import OfferSheetError, analyze_offer_sheet
+from email_validation import EmailValidationError, normalize_email
 from openai_client import OpenAIConfigurationError
 from rate_limit import ApiRateLimitMiddleware
 from report_store import ReportStoreError, get_report, update_report
@@ -481,10 +482,11 @@ def create_buyer_report_preview(payload: BuyerReportPreviewRequest) -> dict:
         raise HTTPException(status_code=400, detail="Mileage cannot be negative.")
     if payload.zip_code and (len(payload.zip_code) != 5 or not payload.zip_code.isdigit()):
         raise HTTPException(status_code=400, detail="Enter a valid five-digit ZIP code.")
-    if payload.email and (
-        "@" not in payload.email or payload.email.startswith("@") or payload.email.endswith("@")
-    ):
-        raise HTTPException(status_code=400, detail="Enter a valid email address.")
+    if payload.email:
+        try:
+            payload.email = normalize_email(payload.email, required=True)
+        except EmailValidationError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
     if payload.listing_url and not payload.listing_url.startswith(("http://", "https://")):
         raise HTTPException(status_code=400, detail="Listing URL must begin with http:// or https://.")
     try:

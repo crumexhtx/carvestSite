@@ -3,8 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { CheckCircle2, Loader2, ShieldAlert } from "lucide-react";
-import ReactMarkdown from "react-markdown";
-
+import { SafeMarkdown } from "@/components/safe-markdown";
 import { DealBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { fetchBuyerReport, type BuyerReportResponse } from "@/lib/api";
@@ -21,15 +20,21 @@ export function BuyerReportView({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     const token =
       initialToken || sessionStorage.getItem(`carvest-report-${reportId}`) || "";
     if (!token) {
-      setError("This report link is missing its access token.");
-      return;
+      queueMicrotask(() => {
+        if (!cancelled) {
+          setError("This report link is missing its access token.");
+        }
+      });
+      return () => {
+        cancelled = true;
+      };
     }
     sessionStorage.setItem(`carvest-report-${reportId}`, token);
 
-    let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let attempts = 0;
     let transientErrors = 0;
@@ -172,7 +177,7 @@ export function BuyerReportView({
         <p className="mb-5 text-xs font-semibold uppercase tracking-[0.2em] text-violet-600">
           Risk and market analysis
         </p>
-        <ReactMarkdown>{full.markdown_report}</ReactMarkdown>
+        <SafeMarkdown>{full.markdown_report}</SafeMarkdown>
       </section>
 
       {full.inspection_checklist?.length ? (

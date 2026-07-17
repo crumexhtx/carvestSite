@@ -17,6 +17,7 @@ import {
   evaluateListingDeal,
   type ListingDealEvaluation,
 } from "@/lib/api";
+import { sanitizeExternalUrl, sanitizeHref } from "@/lib/safe-url";
 import { cn, formatCurrency, formatNumber } from "@/lib/utils";
 
 const CREDIT_OPTIONS = [
@@ -410,10 +411,13 @@ function ListingDealResults({ result }: { result: ListingDealEvaluation }) {
           ))}
         </ul>
         <div className="mt-6 grid gap-3 md:grid-cols-2">
-          {result.next_steps.map((step) => (
+          {result.next_steps.map((step) => {
+            const href = sanitizeHref(step.href);
+            if (!href) return null;
+            return (
             <Link
               key={step.id}
-              href={step.href}
+              href={href}
               className="rounded-2xl border border-border bg-card-subtle p-5 transition hover:border-violet-300 hover:bg-violet-50"
             >
               <p className="flex items-center gap-2 font-medium text-slate-900">
@@ -422,21 +426,26 @@ function ListingDealResults({ result }: { result: ListingDealEvaluation }) {
               </p>
               <p className="mt-2 text-sm leading-6 text-slate-500">{step.description}</p>
             </Link>
-          ))}
+            );
+          })}
         </div>
-        {result.listing.listing_url ? (
+        {(() => {
+          const listingUrl = sanitizeExternalUrl(result.listing.listing_url);
+          if (!listingUrl) return null;
+          return (
           <p className="mt-5 text-xs text-slate-400">
             Listing reference:{" "}
             <a
-              href={result.listing.listing_url}
+              href={listingUrl}
               target="_blank"
-              rel="noreferrer"
+              rel="noopener noreferrer"
               className="underline hover:text-violet-700"
             >
-              {result.listing.listing_url}
+              {listingUrl}
             </a>
           </p>
-        ) : null}
+          );
+        })()}
         <p className="mt-6 border-t border-border pt-5 text-xs leading-5 text-slate-400">
           {result.disclaimer} Mileage entered: {formatNumber(result.listing.mileage)} mi.
         </p>

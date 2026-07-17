@@ -3,9 +3,8 @@
 import { useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUp, Loader2, RotateCcw, Sparkles } from "lucide-react";
-import ReactMarkdown from "react-markdown";
-
 import { FollowUpBubbles } from "@/components/follow-up-bubbles";
+import { SafeMarkdown } from "@/components/safe-markdown";
 import { ModelFocusPanel, isModelFocusPhase } from "@/components/model-focus-panel";
 import { OptionFocusPanel, isOptionFocusPhase } from "@/components/option-focus-panel";
 import { RecommendationCards } from "@/components/recommendation-cards";
@@ -20,7 +19,7 @@ import {
   type ReliabilityRankings,
   type SearchResponse,
 } from "@/lib/api";
-import { DEFAULT_SUGGESTION_CHIPS, pickSuggestionChips } from "@/lib/prompt-suggestions";
+import { pickSuggestionChips } from "@/lib/prompt-suggestions";
 import { spaceLabelSections } from "@/lib/format-assistant-markdown";
 import { cn } from "@/lib/utils";
 
@@ -84,7 +83,7 @@ export function VehicleAiAssistant({
   const [error, setError] = useState<string | null>(null);
   const [focused, setFocused] = useState(false);
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
-  const [suggestionChips, setSuggestionChips] = useState(DEFAULT_SUGGESTION_CHIPS);
+  const [suggestionChips] = useState(() => pickSuggestionChips(SUGGESTION_CHIP_COUNT));
   const initialPromptSentRef = useRef(false);
   const requestIdRef = useRef(0);
   const inFlightRef = useRef(false);
@@ -97,10 +96,6 @@ export function VehicleAiAssistant({
     if (!el) return;
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
-  }, []);
-
-  useEffect(() => {
-    setSuggestionChips(pickSuggestionChips(SUGGESTION_CHIP_COUNT));
   }, []);
 
   useEffect(() => {
@@ -264,6 +259,8 @@ export function VehicleAiAssistant({
     initialPromptSentRef.current = true;
     void sendMessage(prompt);
     onInitialPromptConsumed?.();
+    // sendMessage is intentionally omitted; this effect should fire once per initial prompt.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialPrompt, loading, messages.length, onInitialPromptConsumed]);
 
   const showSideReliability = Boolean(reliabilityRankings);
@@ -430,9 +427,9 @@ export function VehicleAiAssistant({
                               ) : null}
                             </>
                           ) : (
-                            <ReactMarkdown>
+                            <SafeMarkdown>
                               {spaceLabelSections(message.content)}
-                            </ReactMarkdown>
+                            </SafeMarkdown>
                           )}
                         </div>
                       ) : (

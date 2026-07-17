@@ -1,9 +1,8 @@
 "use client";
 
-import ReactMarkdown from "react-markdown";
-
 import type { AssistantHighlight, FollowUpOption } from "@/lib/api";
 import { FollowUpBubbles } from "@/components/follow-up-bubbles";
+import { SafeMarkdown } from "@/components/safe-markdown";
 import { VehicleImage } from "@/components/vehicle-image";
 import { spaceLabelSections } from "@/lib/format-assistant-markdown";
 
@@ -53,7 +52,7 @@ export function OptionFocusPanel({
 
       {summary ? (
         <div className="prose-carvest mt-5">
-          <ReactMarkdown>{spaceLabelSections(summary)}</ReactMarkdown>
+          <SafeMarkdown>{spaceLabelSections(summary)}</SafeMarkdown>
         </div>
       ) : null}
 

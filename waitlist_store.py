@@ -8,6 +8,8 @@ from typing import Any, Optional
 
 import requests
 
+from email_validation import EmailValidationError, normalize_email
+
 
 class WaitlistError(Exception):
     pass
@@ -45,12 +47,12 @@ def _sqlite_connection() -> sqlite3.Connection:
 
 
 def _normalize_email(email: str) -> str:
-    cleaned = email.strip().lower()
-    if "@" not in cleaned or cleaned.startswith("@") or cleaned.endswith("@"):
-        raise WaitlistError("Enter a valid email address.")
-    if len(cleaned) > 254:
-        raise WaitlistError("Email address is too long.")
-    return cleaned
+    try:
+        normalized = normalize_email(email, required=True)
+    except EmailValidationError as exc:
+        raise WaitlistError(str(exc)) from exc
+    assert normalized is not None
+    return normalized
 
 
 def _supabase_upsert(email: str, source: Optional[str]) -> dict[str, Any]:

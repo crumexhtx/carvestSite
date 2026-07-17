@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Copy, Loader2, MessageSquare } from "lucide-react";
-import ReactMarkdown from "react-markdown";
 
+import { SafeMarkdown } from "@/components/safe-markdown";
 import { Button } from "@/components/ui/button";
 import { generateNegotiationPack, type NegotiationPack } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
@@ -27,39 +27,51 @@ type NegotiationPanelProps = {
 };
 
 export function NegotiationPanel(props: NegotiationPanelProps) {
+  const listingKey = useMemo(
+    () =>
+      JSON.stringify({
+        heading: props.heading,
+        price: props.price,
+        miles: props.miles,
+        vin: props.vin,
+        zipCode: props.zipCode,
+        make: props.make,
+        model: props.model,
+        year: props.year,
+        dom: props.dom,
+        dealerName: props.dealerName,
+        city: props.city,
+        state: props.state,
+        dealSignal: props.dealSignal,
+        predictedFairPrice: props.predictedFairPrice,
+        priceDelta: props.priceDelta,
+      }),
+    [props],
+  );
+
   const [pack, setPack] = useState<NegotiationPack | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<"email" | "text" | null>(null);
+  const [trackedKey, setTrackedKey] = useState(listingKey);
   const requestIdRef = useRef(0);
+  const listingKeyRef = useRef(listingKey);
 
-  useEffect(() => {
-    // Reset generated guidance when the listing identity changes.
+  if (trackedKey !== listingKey) {
+    setTrackedKey(listingKey);
     setPack(null);
     setError(null);
     setLoading(false);
-    requestIdRef.current += 1;
-  }, [
-    props.heading,
-    props.price,
-    props.miles,
-    props.vin,
-    props.zipCode,
-    props.make,
-    props.model,
-    props.year,
-    props.dom,
-    props.dealerName,
-    props.city,
-    props.state,
-    props.dealSignal,
-    props.predictedFairPrice,
-    props.priceDelta,
-  ]);
+  }
+
+  useEffect(() => {
+    listingKeyRef.current = listingKey;
+  }, [listingKey]);
 
   async function generatePack() {
     if (!props.price || loading) return;
     const requestId = ++requestIdRef.current;
+    const keyAtStart = listingKey;
     setLoading(true);
     setError(null);
 
@@ -82,10 +94,20 @@ export function NegotiationPanel(props: NegotiationPanelProps) {
         listing_price: props.price,
         price_delta: props.priceDelta,
       });
-      if (requestId !== requestIdRef.current) return;
+      if (
+        requestId !== requestIdRef.current ||
+        keyAtStart !== listingKeyRef.current
+      ) {
+        return;
+      }
       setPack(result);
     } catch (err) {
-      if (requestId !== requestIdRef.current) return;
+      if (
+        requestId !== requestIdRef.current ||
+        keyAtStart !== listingKeyRef.current
+      ) {
+        return;
+      }
       setError(err instanceof Error ? err.message : "Negotiation failed.");
     } finally {
       if (requestId === requestIdRef.current) {
@@ -227,7 +249,7 @@ function ScriptBlock({
         </Button>
       </div>
       <div className="prose-carvest text-sm">
-        <ReactMarkdown>{script}</ReactMarkdown>
+        <SafeMarkdown>{script}</SafeMarkdown>
       </div>
     </div>
   );

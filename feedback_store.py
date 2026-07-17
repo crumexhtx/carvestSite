@@ -9,6 +9,8 @@ from typing import Any, Optional
 
 import requests
 
+from email_validation import EmailValidationError, normalize_email
+
 
 ALLOWED_CATEGORIES = {"bug", "idea", "other"}
 
@@ -52,16 +54,10 @@ def _sqlite_connection() -> sqlite3.Connection:
 
 
 def _normalize_email(email: Optional[str]) -> Optional[str]:
-    if email is None:
-        return None
-    cleaned = email.strip().lower()
-    if not cleaned:
-        return None
-    if "@" not in cleaned or cleaned.startswith("@") or cleaned.endswith("@"):
-        raise FeedbackError("Enter a valid email address, or leave it blank.")
-    if len(cleaned) > 254:
-        raise FeedbackError("Email address is too long.")
-    return cleaned
+    try:
+        return normalize_email(email or "", required=False)
+    except EmailValidationError as exc:
+        raise FeedbackError("Enter a valid email address, or leave it blank.") from exc
 
 
 def submit_feedback(

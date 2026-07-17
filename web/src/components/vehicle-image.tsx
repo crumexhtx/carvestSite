@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Car } from "lucide-react";
 
 import type { AssistantHighlight } from "@/lib/api";
@@ -25,16 +25,20 @@ export function VehicleImage({
 
   const listingPhoto =
     item.photo_source === "listing" && item.photo ? item.photo : null;
+  const desiredSrc = listingPhoto ?? proxyUrl;
 
-  const [src, setSrc] = useState<string | null>(listingPhoto ?? proxyUrl);
+  const [src, setSrc] = useState<string | null>(desiredSrc);
   const [failed, setFailed] = useState(false);
   const [usedProxy, setUsedProxy] = useState(!listingPhoto);
+  const [trackedDesired, setTrackedDesired] = useState(desiredSrc);
 
-  useEffect(() => {
-    setSrc(listingPhoto ?? proxyUrl);
+  // Reset image state when the desired source changes (React-recommended render adjustment).
+  if (desiredSrc !== trackedDesired) {
+    setTrackedDesired(desiredSrc);
+    setSrc(desiredSrc);
     setFailed(false);
     setUsedProxy(!listingPhoto);
-  }, [listingPhoto, proxyUrl]);
+  }
 
   const shellClass = cn(
     "relative overflow-hidden rounded-xl border border-border bg-gradient-to-b from-slate-100/80 to-card-subtle",
@@ -45,6 +49,8 @@ export function VehicleImage({
   if (src && !failed) {
     return (
       <div className={shellClass}>
+        {/* External listing/reference hosts vary; next/image domains are not all known. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={src}
           alt={item.title}

@@ -4,7 +4,7 @@ const SECTION_LABEL = /^(\s*(?:[-*]\s+)?)([A-Z][A-Za-z0-9\s/&()-]{2,40}:)/;
  * Adds a blank line before section labels like "Generations:" or "Common Features:".
  */
 export function spaceLabelSections(content: string): string {
-  let spaced = content.replace(
+  const spaced = content.replace(
     /([.!?])\s+([A-Z][A-Za-z0-9\s/&()-]{2,40}:)/g,
     "$1\n\n$2",
   );

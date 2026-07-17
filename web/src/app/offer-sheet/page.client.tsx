@@ -101,6 +101,13 @@ export function OfferSheetClient({ defaultPrice = "" }: { defaultPrice?: string 
       setError("Enter at least one line item from the dealer quote.");
       return;
     }
+    const missingAmount = enteredLines.some(
+      (line) => line.amount.trim() === "" || Number.isNaN(Number(line.amount)),
+    );
+    if (missingAmount) {
+      setError("Enter a numeric amount for every labeled line item.");
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -108,7 +115,7 @@ export function OfferSheetClient({ defaultPrice = "" }: { defaultPrice?: string 
         advertised_price: Number(advertisedPrice),
         line_items: enteredLines.map((line) => ({
           label: line.label.trim(),
-          amount: Number(line.amount || 0),
+          amount: Number(line.amount),
         })),
         state: stateCode || undefined,
         zip_code: zipCode || undefined,
