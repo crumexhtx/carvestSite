@@ -6,6 +6,7 @@ import { CheckCircle2, Loader2, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { joinWaitlist } from "@/lib/api";
+import { trackEvent } from "@/lib/analytics";
 import { features } from "@/lib/features";
 
 export function SoftLaunchWaitlist({
@@ -33,6 +34,7 @@ export function SoftLaunchWaitlist({
     setSuccess(null);
     try {
       const result = await joinWaitlist({ email, source });
+      trackEvent("Waitlist Join", { source });
       setSuccess(result.message);
       setEmail("");
     } catch (err) {

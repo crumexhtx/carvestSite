@@ -1,8 +1,26 @@
+import type { Metadata } from "next";
+
+import { buildMetadata } from "@/lib/seo";
+
 import { BuyerReportView } from "./report-view";
 
 function firstString(value: string | string[] | undefined): string {
   if (Array.isArray(value)) return value[0] ?? "";
   return value ?? "";
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ reportId: string }>;
+}): Promise<Metadata> {
+  const route = await params;
+  return buildMetadata({
+    title: "Your buyer report",
+    description: "Private Carvest VIN buyer report.",
+    path: `/report/${route.reportId}`,
+    noIndex: true,
+  });
 }
 
 export default async function BuyerReportResultPage({

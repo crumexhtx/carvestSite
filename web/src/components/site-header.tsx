@@ -11,6 +11,12 @@ export function SiteHeader() {
         </Link>
         <nav className="flex items-center gap-1 sm:gap-2">
           <Link
+            href="/cars"
+            className="rounded-full px-2.5 py-2 text-xs font-medium text-slate-600 transition hover:bg-card-subtle hover:text-violet-700 sm:px-3 sm:text-sm"
+          >
+            Research
+          </Link>
+          <Link
             href="/listing-deal"
             className="rounded-full px-2.5 py-2 text-xs font-medium text-slate-600 transition hover:bg-card-subtle hover:text-violet-700 sm:px-3 sm:text-sm"
           >

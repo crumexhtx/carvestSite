@@ -1,3 +1,13 @@
+import type { Metadata } from "next";
+
+import { buildMetadata } from "@/lib/seo";
+
+export const metadata: Metadata = buildMetadata({
+  title: "Terms of use",
+  description: "Terms governing use of Carvest vehicle research tools and reports.",
+  path: "/terms",
+});
+
 export default function TermsPage() {
   return (
     <main className="mx-auto max-w-3xl px-4 py-12">
