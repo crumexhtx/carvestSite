@@ -1,4 +1,15 @@
+import type { Metadata } from "next";
+
+import { buildMetadata } from "@/lib/seo";
+
 import { ListingDealClient } from "./page.client";
+
+export const metadata: Metadata = buildMetadata({
+  title: "Listing deal checker",
+  description:
+    "Paste a VIN and asking price to see fair-market signal, payment estimates, and what to do next before you buy.",
+  path: "/listing-deal",
+});
 
 export default async function ListingDealPage({
   searchParams,

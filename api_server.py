@@ -33,6 +33,7 @@ from listing_trust import verify_listing_trust
 from openai_client import OpenAIConfigurationError
 from rate_limit import ApiRateLimitMiddleware
 from report_store import ReportStoreError, get_report, update_report
+from seo_hubs import curated_hubs, get_model_brief
 from startup_checks import validate_production_config
 from stripe_service import (
     PaymentConfigurationError,
@@ -484,6 +485,36 @@ def home_insights() -> dict:
         return get_home_insights()
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.get("/api/seo/hubs")
+def seo_hubs() -> Response:
+    """Curated crawlable vehicle hubs for sitemap and /cars index."""
+    hubs = curated_hubs()
+    return Response(
+        content=json.dumps({"hubs": hubs, "count": len(hubs)}),
+        media_type="application/json",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
+@app.get("/api/seo/model-brief")
+def seo_model_brief(
+    make: str = Query(..., min_length=1, max_length=80),
+    model: str = Query(..., min_length=1, max_length=120),
+    year: str = Query(..., min_length=4, max_length=4),
+) -> Response:
+    """Public SSR-friendly brief for make/model/year research pages."""
+    if not year.isdigit():
+        raise HTTPException(status_code=400, detail="Year must be a 4-digit number.")
+    brief = get_model_brief(make, model, year)
+    if brief is None:
+        raise HTTPException(status_code=404, detail="Vehicle not found in catalog.")
+    return Response(
+        content=json.dumps(brief),
+        media_type="application/json",
+        headers={"Cache-Control": "public, max-age=900"},
+    )
 
 
 @app.post("/api/waitlist")

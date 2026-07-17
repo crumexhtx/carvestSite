@@ -1,9 +1,24 @@
+import type { Metadata } from "next";
+
 import { VehicleDetailView } from "@/components/vehicle-detail-view";
+import { buildMetadata } from "@/lib/seo";
 
 type VehiclePageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
   params: Promise<{ id: string }>;
 };
+
+export async function generateMetadata({
+  params,
+}: VehiclePageProps): Promise<Metadata> {
+  const routeParams = await params;
+  return buildMetadata({
+    title: "Vehicle details",
+    description: "Listing detail snapshot from a Carvest search session.",
+    path: `/vehicle/${routeParams.id}`,
+    noIndex: true,
+  });
+}
 
 export default async function VehicleDetailPage({ searchParams, params }: VehiclePageProps) {
   const query = await searchParams;

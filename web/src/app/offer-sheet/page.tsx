@@ -1,4 +1,15 @@
+import type { Metadata } from "next";
+
+import { buildMetadata } from "@/lib/seo";
+
 import { OfferSheetClient } from "./page.client";
+
+export const metadata: Metadata = buildMetadata({
+  title: "Dealer offer analyzer",
+  description:
+    "Break down dealer fees, add-ons, and government charges so you know what is negotiable before you sign.",
+  path: "/offer-sheet",
+});
 
 export default async function OfferSheetPage({
   searchParams,

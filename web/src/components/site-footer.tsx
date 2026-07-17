@@ -6,6 +6,9 @@ export function SiteFooter() {
       <div className="mx-auto flex max-w-5xl flex-col gap-3 px-6 py-6 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
         <p>© {new Date().getFullYear()} Carvest. Research before you invest.</p>
         <nav className="flex flex-wrap gap-5">
+          <Link className="transition hover:text-violet-700" href="/cars">
+            Research hubs
+          </Link>
           <Link className="transition hover:text-violet-700" href="/feedback">
             Feedback
           </Link>

@@ -1,3 +1,13 @@
+import type { Metadata } from "next";
+
+import { buildMetadata } from "@/lib/seo";
+
+export const metadata: Metadata = buildMetadata({
+  title: "Privacy notice",
+  description: "How Carvest collects and uses information for vehicle research reports.",
+  path: "/privacy",
+});
+
 export default function PrivacyPage() {
   return (
     <main className="mx-auto max-w-3xl px-4 py-12">

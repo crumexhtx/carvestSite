@@ -2,8 +2,14 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Suspense } from "react";
 
+import { Analytics } from "@/components/analytics";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
+import {
+  defaultSiteDescription,
+  defaultSiteTitle,
+  getSiteUrl,
+} from "@/lib/seo";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -16,10 +22,30 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const siteUrl = getSiteUrl();
+
 export const metadata: Metadata = {
-  title: "Carvest | Investigate before you invest",
-  description:
-    "Premium car research with live listings, recall intelligence, fair-price signals, and competitive comparisons.",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: defaultSiteTitle,
+    template: "%s | Carvest",
+  },
+  description: defaultSiteDescription,
+  alternates: {
+    canonical: siteUrl,
+  },
+  openGraph: {
+    type: "website",
+    url: siteUrl,
+    siteName: "Carvest",
+    title: defaultSiteTitle,
+    description: defaultSiteDescription,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: defaultSiteTitle,
+    description: defaultSiteDescription,
+  },
 };
 
 export default function RootLayout({
@@ -33,6 +59,7 @@ export default function RootLayout({
         <SiteHeader />
         <Suspense fallback={null}>{children}</Suspense>
         <SiteFooter />
+        <Analytics />
       </body>
     </html>
   );
