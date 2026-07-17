@@ -27,11 +27,14 @@ export default function SearchPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const resultsMode = searchParams.get("mode") === "results";
-  const page = Math.max(1, Number(searchParams.get("page") || "1"));
+  const rawPage = Number(searchParams.get("page") || "1");
+  const page =
+    Number.isFinite(rawPage) && rawPage >= 1 ? Math.floor(rawPage) : 1;
 
   const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sessionMissing, setSessionMissing] = useState(false);
   const [results, setResults] = useState<SearchResponse | null>(null);
   const [criteria, setCriteria] = useState<AssistantCriteria | null>(null);
   const [displayCriteria, setDisplayCriteria] = useState<AssistantCriteria | null>(null);
@@ -49,16 +52,21 @@ export default function SearchPage() {
     if (!resultsMode) return;
 
     const raw = sessionStorage.getItem("carvest-search");
-    if (!raw) return;
+    if (!raw) {
+      setSessionMissing(true);
+      return;
+    }
 
     try {
       const parsed = JSON.parse(raw) as StoredSearch;
+      setSessionMissing(false);
       setCriteria(parsed.criteria);
       setDisplayCriteria(parsed.displayCriteria ?? parsed.criteria);
       if (page === 1) {
         setResults(parsed.results);
       }
     } catch {
+      setSessionMissing(true);
       setError("Could not load your saved search session.");
     }
   }, [resultsMode, page]);
@@ -164,6 +172,19 @@ export default function SearchPage() {
         </p>
       ) : null}
       {error ? <p className="text-rose-600">{error}</p> : null}
+
+      {sessionMissing ? (
+        <div className="maskara-glass rounded-3xl p-8 text-center">
+          <h2 className="text-2xl font-semibold text-slate-900">Search session expired</h2>
+          <p className="mt-3 text-sm leading-6 text-slate-600">
+            This results link no longer has a saved search in this browser. Start a new
+            assistant search to load fresh listings.
+          </p>
+          <Button className="mt-6" onClick={() => router.push("/")}>
+            Start a new search
+          </Button>
+        </div>
+      ) : null}
 
       {results ? (
         <section>

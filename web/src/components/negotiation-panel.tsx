@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Copy, Loader2, MessageSquare } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
@@ -31,36 +31,14 @@ export function NegotiationPanel(props: NegotiationPanelProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<"email" | "text" | null>(null);
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
-    if (!props.price) return;
-
-    setLoading(true);
+    // Reset generated guidance when the listing identity changes.
+    setPack(null);
     setError(null);
-
-    generateNegotiationPack({
-      heading: props.heading,
-      price: props.price,
-      miles: props.miles,
-      vin: props.vin,
-      zip_code: props.zipCode,
-      make: props.make,
-      model: props.model,
-      year: props.year,
-      dom: props.dom,
-      dealer_name: props.dealerName,
-      city: props.city,
-      state: props.state,
-      deal_signal: props.dealSignal,
-      predicted_fair_price: props.predictedFairPrice,
-      listing_price: props.price,
-      price_delta: props.priceDelta,
-    })
-      .then(setPack)
-      .catch((err) => {
-        setError(err instanceof Error ? err.message : "Negotiation failed.");
-      })
-      .finally(() => setLoading(false));
+    setLoading(false);
+    requestIdRef.current += 1;
   }, [
     props.heading,
     props.price,
@@ -79,6 +57,43 @@ export function NegotiationPanel(props: NegotiationPanelProps) {
     props.priceDelta,
   ]);
 
+  async function generatePack() {
+    if (!props.price || loading) return;
+    const requestId = ++requestIdRef.current;
+    setLoading(true);
+    setError(null);
+
+    try {
+      const result = await generateNegotiationPack({
+        heading: props.heading,
+        price: props.price,
+        miles: props.miles,
+        vin: props.vin,
+        zip_code: props.zipCode,
+        make: props.make,
+        model: props.model,
+        year: props.year,
+        dom: props.dom,
+        dealer_name: props.dealerName,
+        city: props.city,
+        state: props.state,
+        deal_signal: props.dealSignal,
+        predicted_fair_price: props.predictedFairPrice,
+        listing_price: props.price,
+        price_delta: props.priceDelta,
+      });
+      if (requestId !== requestIdRef.current) return;
+      setPack(result);
+    } catch (err) {
+      if (requestId !== requestIdRef.current) return;
+      setError(err instanceof Error ? err.message : "Negotiation failed.");
+    } finally {
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+      }
+    }
+  }
+
   async function copyText(kind: "email" | "text", value: string) {
     await navigator.clipboard.writeText(value);
     setCopied(kind);
@@ -93,6 +108,18 @@ export function NegotiationPanel(props: NegotiationPanelProps) {
           Negotiation coach
         </h2>
       </div>
+
+      {!pack && !loading ? (
+        <div className="space-y-3">
+          <p className="text-sm leading-6 text-slate-600">
+            Generate opening offers, talking points, and dealer scripts for this
+            listing when you are ready to negotiate.
+          </p>
+          <Button onClick={() => void generatePack()} disabled={!props.price}>
+            Build negotiation pack
+          </Button>
+        </div>
+      ) : null}
 
       {loading ? (
         <div className="flex items-center gap-2 text-sm text-slate-500">
@@ -146,6 +173,10 @@ export function NegotiationPanel(props: NegotiationPanelProps) {
           {pack.caution ? (
             <p className="text-xs text-slate-500">{pack.caution}</p>
           ) : null}
+
+          <Button variant="ghost" size="sm" onClick={() => void generatePack()}>
+            Regenerate
+          </Button>
         </div>
       ) : null}
     </section>

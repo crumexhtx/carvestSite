@@ -2,7 +2,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import buyer_report_service
 import negotiation
@@ -68,11 +68,9 @@ class NegotiationOfferTests(unittest.TestCase):
         self.assertEqual(offers["target_price"], 30000)
 
     def test_ai_failure_returns_deterministic_fallback(self) -> None:
-        with patch.object(
-            negotiation.client.chat.completions,
-            "create",
-            side_effect=RuntimeError("openai down"),
-        ):
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.side_effect = RuntimeError("openai down")
+        with patch.object(negotiation, "client", mock_client):
             pack = negotiation.generate_negotiation_pack(
                 {
                     "heading": "Test Car",

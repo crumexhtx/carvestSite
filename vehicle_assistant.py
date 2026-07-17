@@ -11,9 +11,7 @@ from assistant_research import (
     model_drivetrain_options,
     model_trim_options,
 )
-from openai_client import create_openai_client
-
-client = create_openai_client()
+from openai_client import client
 
 PROFILE_FIELDS = [
     "make",

@@ -1,4 +1,13 @@
-export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
+const configuredApiBase = process.env.NEXT_PUBLIC_API_URL?.trim();
+const isProductionBuild = process.env.NODE_ENV === "production";
+
+if (isProductionBuild && !configuredApiBase) {
+  console.error(
+    "NEXT_PUBLIC_API_URL is not set. The browser will not be able to reach the Carvest API.",
+  );
+}
+
+export const API_BASE = configuredApiBase || "http://127.0.0.1:8000";
 
 export type VehicleSearchParams = {
   make: string;
@@ -300,12 +309,20 @@ export type AssistantChatResponse = {
 };
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const method = (init?.method ?? "GET").toUpperCase();
+  const headers = new Headers(init?.headers);
+  if (
+    method !== "GET" &&
+    method !== "HEAD" &&
+    !headers.has("Content-Type") &&
+    init?.body != null
+  ) {
+    headers.set("Content-Type", "application/json");
+  }
+
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
+    headers,
     cache: "no-store",
   });
 

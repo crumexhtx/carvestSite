@@ -86,6 +86,8 @@ export function VehicleAiAssistant({
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [suggestionChips, setSuggestionChips] = useState(DEFAULT_SUGGESTION_CHIPS);
   const initialPromptSentRef = useRef(false);
+  const requestIdRef = useRef(0);
+  const inFlightRef = useRef(false);
 
   const profilePills = useMemo(() => criteriaPills(criteria), [criteria]);
   const inConversation = messages.length > 0;
@@ -120,17 +122,19 @@ export function VehicleAiAssistant({
 
   async function sendMessage(rawMessage: string) {
     const trimmed = rawMessage.trim();
-    if (!trimmed || loading) return;
+    if (!trimmed || inFlightRef.current) return;
 
+    const requestId = ++requestIdRef.current;
+    inFlightRef.current = true;
     setLoading(true);
     setError(null);
     setPrompt("");
 
-    const nextMessages: ChatMessage[] = [
-      ...messages,
-      { role: "user", content: trimmed },
-    ];
-    setMessages(nextMessages);
+    let nextMessages: ChatMessage[] = [];
+    setMessages((prev) => {
+      nextMessages = [...prev, { role: "user", content: trimmed }];
+      return nextMessages;
+    });
 
     try {
       const response = await assistantChat({
@@ -141,6 +145,7 @@ export function VehicleAiAssistant({
           content: item.content,
         })),
       });
+      if (requestId !== requestIdRef.current) return;
 
       setCriteria(response.criteria);
       setReadyToSearch(response.ready_to_search);
@@ -162,6 +167,7 @@ export function VehicleAiAssistant({
 
       if (response.ready_to_search) {
         const results = await searchByCriteria(response.criteria, { rows: 24 });
+        if (requestId !== requestIdRef.current) return;
         const listingCount = results.listings?.length ?? 0;
 
         if (listingCount === 0 || results.match_quality === "none") {
@@ -215,10 +221,14 @@ export function VehicleAiAssistant({
         }
       }
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       setError(err instanceof Error ? err.message : "Assistant request failed.");
     } finally {
-      setLoading(false);
-      textareaRef.current?.focus();
+      if (requestId === requestIdRef.current) {
+        inFlightRef.current = false;
+        setLoading(false);
+        textareaRef.current?.focus();
+      }
     }
   }
 
@@ -234,11 +244,14 @@ export function VehicleAiAssistant({
   }
 
   function handleNewChat() {
+    requestIdRef.current += 1;
+    inFlightRef.current = false;
     setMessages([]);
     setCriteria({});
     setReadyToSearch(false);
     setError(null);
     setPrompt("");
+    setLoading(false);
     initialPromptSentRef.current = false;
     textareaRef.current?.focus();
   }

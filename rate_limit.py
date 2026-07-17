@@ -37,7 +37,12 @@ class ApiRateLimitMiddleware(BaseHTTPMiddleware):
         self._lock = threading.Lock()
 
     def _client_key(self, request: Request) -> str:
-        client_host = request.client.host if request.client else "unknown"
+        # Prefer the first X-Forwarded-For hop when running behind a reverse proxy.
+        forwarded = request.headers.get("x-forwarded-for", "").strip()
+        if forwarded:
+            client_host = forwarded.split(",")[0].strip() or "unknown"
+        else:
+            client_host = request.client.host if request.client else "unknown"
         return f"{client_host}:{request.url.path}"
 
     def _allow(self, key: str) -> tuple[bool, int]:

@@ -31,6 +31,25 @@ def load_competitor_map(path: Path = MAP_FILE) -> dict[str, Any]:
         return json.load(handle)
 
 
+def _segment_competitors_for(
+    data: dict[str, Any],
+    key: str,
+) -> tuple[Optional[str], list[dict[str, str]]]:
+    """Fallback: if a model isn't mapped, use the segment that contains it."""
+    for segment_name, members in (data.get("segments") or {}).items():
+        normalized_members = [
+            {
+                "make": str(item.get("make") or "").strip(),
+                "model": str(item.get("model") or "").strip(),
+            }
+            for item in members
+            if item.get("make") and item.get("model")
+        ]
+        if any(_normalize_key(item["make"], item["model"]) == key for item in normalized_members):
+            return segment_name, normalized_members
+    return None, []
+
+
 def get_competitors(
     make: str,
     model: str,
@@ -46,9 +65,8 @@ def get_competitors(
         segment = entry["segment"]
         source = "model_map"
     else:
-        competitors = []
-        segment = None
-        source = "none"
+        segment, competitors = _segment_competitors_for(data, key)
+        source = "segment_fallback" if segment else "none"
 
     if exclude_self:
         competitors = [
