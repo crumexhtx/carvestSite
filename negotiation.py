@@ -5,9 +5,8 @@ from typing import Any, Optional
 from app_ai_core import verify_vehicle_exists
 from fetch_marketcheck import MarketCheckError, predict_market_price
 from fetch_recalls import get_live_recalls, recalls_available
-from openai_client import create_openai_client
+from openai_client import client
 
-client = create_openai_client()
 logger = logging.getLogger(__name__)
 
 

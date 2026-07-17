@@ -3,9 +3,8 @@
 import { useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUp, Loader2, RotateCcw, Sparkles } from "lucide-react";
-import ReactMarkdown from "react-markdown";
-
 import { FollowUpBubbles } from "@/components/follow-up-bubbles";
+import { SafeMarkdown } from "@/components/safe-markdown";
 import { ModelFocusPanel, isModelFocusPhase } from "@/components/model-focus-panel";
 import { OptionFocusPanel, isOptionFocusPhase } from "@/components/option-focus-panel";
 import { RecommendationCards } from "@/components/recommendation-cards";
@@ -20,7 +19,7 @@ import {
   type ReliabilityRankings,
   type SearchResponse,
 } from "@/lib/api";
-import { DEFAULT_SUGGESTION_CHIPS, pickSuggestionChips } from "@/lib/prompt-suggestions";
+import { pickSuggestionChips } from "@/lib/prompt-suggestions";
 import { spaceLabelSections } from "@/lib/format-assistant-markdown";
 import { cn } from "@/lib/utils";
 
@@ -84,8 +83,10 @@ export function VehicleAiAssistant({
   const [error, setError] = useState<string | null>(null);
   const [focused, setFocused] = useState(false);
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
-  const [suggestionChips, setSuggestionChips] = useState(DEFAULT_SUGGESTION_CHIPS);
+  const [suggestionChips] = useState(() => pickSuggestionChips(SUGGESTION_CHIP_COUNT));
   const initialPromptSentRef = useRef(false);
+  const requestIdRef = useRef(0);
+  const inFlightRef = useRef(false);
 
   const profilePills = useMemo(() => criteriaPills(criteria), [criteria]);
   const inConversation = messages.length > 0;
@@ -95,10 +96,6 @@ export function VehicleAiAssistant({
     if (!el) return;
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
-  }, []);
-
-  useEffect(() => {
-    setSuggestionChips(pickSuggestionChips(SUGGESTION_CHIP_COUNT));
   }, []);
 
   useEffect(() => {
@@ -120,17 +117,19 @@ export function VehicleAiAssistant({
 
   async function sendMessage(rawMessage: string) {
     const trimmed = rawMessage.trim();
-    if (!trimmed || loading) return;
+    if (!trimmed || inFlightRef.current) return;
 
+    const requestId = ++requestIdRef.current;
+    inFlightRef.current = true;
     setLoading(true);
     setError(null);
     setPrompt("");
 
-    const nextMessages: ChatMessage[] = [
-      ...messages,
-      { role: "user", content: trimmed },
-    ];
-    setMessages(nextMessages);
+    let nextMessages: ChatMessage[] = [];
+    setMessages((prev) => {
+      nextMessages = [...prev, { role: "user", content: trimmed }];
+      return nextMessages;
+    });
 
     try {
       const response = await assistantChat({
@@ -141,6 +140,7 @@ export function VehicleAiAssistant({
           content: item.content,
         })),
       });
+      if (requestId !== requestIdRef.current) return;
 
       setCriteria(response.criteria);
       setReadyToSearch(response.ready_to_search);
@@ -162,6 +162,7 @@ export function VehicleAiAssistant({
 
       if (response.ready_to_search) {
         const results = await searchByCriteria(response.criteria, { rows: 24 });
+        if (requestId !== requestIdRef.current) return;
         const listingCount = results.listings?.length ?? 0;
 
         if (listingCount === 0 || results.match_quality === "none") {
@@ -215,10 +216,14 @@ export function VehicleAiAssistant({
         }
       }
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       setError(err instanceof Error ? err.message : "Assistant request failed.");
     } finally {
-      setLoading(false);
-      textareaRef.current?.focus();
+      if (requestId === requestIdRef.current) {
+        inFlightRef.current = false;
+        setLoading(false);
+        textareaRef.current?.focus();
+      }
     }
   }
 
@@ -234,11 +239,14 @@ export function VehicleAiAssistant({
   }
 
   function handleNewChat() {
+    requestIdRef.current += 1;
+    inFlightRef.current = false;
     setMessages([]);
     setCriteria({});
     setReadyToSearch(false);
     setError(null);
     setPrompt("");
+    setLoading(false);
     initialPromptSentRef.current = false;
     textareaRef.current?.focus();
   }
@@ -251,6 +259,8 @@ export function VehicleAiAssistant({
     initialPromptSentRef.current = true;
     void sendMessage(prompt);
     onInitialPromptConsumed?.();
+    // sendMessage is intentionally omitted; this effect should fire once per initial prompt.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialPrompt, loading, messages.length, onInitialPromptConsumed]);
 
   const showSideReliability = Boolean(reliabilityRankings);
@@ -417,9 +427,9 @@ export function VehicleAiAssistant({
                               ) : null}
                             </>
                           ) : (
-                            <ReactMarkdown>
+                            <SafeMarkdown>
                               {spaceLabelSections(message.content)}
-                            </ReactMarkdown>
+                            </SafeMarkdown>
                           )}
                         </div>
                       ) : (

@@ -2,8 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import ReactMarkdown from "react-markdown";
-
+import { SafeMarkdown } from "@/components/safe-markdown";
 import { VehicleCard } from "@/components/vehicle-card";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,11 +26,14 @@ export default function SearchPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const resultsMode = searchParams.get("mode") === "results";
-  const page = Math.max(1, Number(searchParams.get("page") || "1"));
+  const rawPage = Number(searchParams.get("page") || "1");
+  const page =
+    Number.isFinite(rawPage) && rawPage >= 1 ? Math.floor(rawPage) : 1;
 
   const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sessionMissing, setSessionMissing] = useState(false);
   const [results, setResults] = useState<SearchResponse | null>(null);
   const [criteria, setCriteria] = useState<AssistantCriteria | null>(null);
   const [displayCriteria, setDisplayCriteria] = useState<AssistantCriteria | null>(null);
@@ -48,33 +50,65 @@ export default function SearchPage() {
   useEffect(() => {
     if (!resultsMode) return;
 
+    let cancelled = false;
     const raw = sessionStorage.getItem("carvest-search");
-    if (!raw) return;
+    if (!raw) {
+      queueMicrotask(() => {
+        if (!cancelled) setSessionMissing(true);
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
 
     try {
       const parsed = JSON.parse(raw) as StoredSearch;
-      setCriteria(parsed.criteria);
-      setDisplayCriteria(parsed.displayCriteria ?? parsed.criteria);
-      if (page === 1) {
-        setResults(parsed.results);
-      }
+      queueMicrotask(() => {
+        if (cancelled) return;
+        setSessionMissing(false);
+        setCriteria(parsed.criteria);
+        setDisplayCriteria(parsed.displayCriteria ?? parsed.criteria);
+        if (page === 1) {
+          setResults(parsed.results);
+        }
+      });
     } catch {
-      setError("Could not load your saved search session.");
+      queueMicrotask(() => {
+        if (cancelled) return;
+        setSessionMissing(true);
+        setError("Could not load your saved search session.");
+      });
     }
+    return () => {
+      cancelled = true;
+    };
   }, [resultsMode, page]);
 
   useEffect(() => {
     if (!resultsMode || !criteria || page === 1) return;
 
-    setPageLoading(true);
-    setError(null);
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setPageLoading(true);
+      setError(null);
+    });
 
     searchByCriteria(criteria, { start: (page - 1) * PAGE_SIZE, rows: PAGE_SIZE })
-      .then(setResults)
-      .catch((err) => {
-        setError(err instanceof Error ? err.message : "Could not load page.");
+      .then((data) => {
+        if (!cancelled) setResults(data);
       })
-      .finally(() => setPageLoading(false));
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Could not load page.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setPageLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [resultsMode, criteria, page]);
 
   async function loadReport(current: AssistantCriteria, useCompare: boolean) {
@@ -165,6 +199,19 @@ export default function SearchPage() {
       ) : null}
       {error ? <p className="text-rose-600">{error}</p> : null}
 
+      {sessionMissing ? (
+        <div className="maskara-glass rounded-3xl p-8 text-center">
+          <h2 className="text-2xl font-semibold text-slate-900">Search session expired</h2>
+          <p className="mt-3 text-sm leading-6 text-slate-600">
+            This results link no longer has a saved search in this browser. Start a new
+            assistant search to load fresh listings.
+          </p>
+          <Button className="mt-6" onClick={() => router.push("/")}>
+            Start a new search
+          </Button>
+        </div>
+      ) : null}
+
       {results ? (
         <section>
           {results.match_quality === "closest" && results.match_notice ? (
@@ -247,7 +294,7 @@ export default function SearchPage() {
       {report ? (
         <section className="prose-carvest maskara-glass mt-14 rounded-3xl p-8">
           <p className="mb-4 text-xs uppercase tracking-[0.25em] text-slate-500">Carvest report</p>
-          <ReactMarkdown>{report}</ReactMarkdown>
+          <SafeMarkdown>{report}</SafeMarkdown>
         </section>
       ) : null}
 
@@ -256,7 +303,7 @@ export default function SearchPage() {
           <p className="mb-4 text-xs uppercase tracking-[0.25em] text-slate-500">
             Competitive comparison
           </p>
-          <ReactMarkdown>{comparison.report}</ReactMarkdown>
+          <SafeMarkdown>{comparison.report}</SafeMarkdown>
         </section>
       ) : null}
     </main>

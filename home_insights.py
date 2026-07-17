@@ -2,7 +2,13 @@ from datetime import date
 
 from fetch_recalls import get_live_recalls, get_live_recalls_many
 
-RELIABILITY_REFERENCE_YEAR = date.today().year - 3
+
+def reliability_reference_year() -> int:
+    return date.today().year - 3
+
+
+# Kept for backward compatibility with imports/tests.
+RELIABILITY_REFERENCE_YEAR = reliability_reference_year()
 
 # Curated from Consumer Reports owner-reliability surveys (model-year rankings).
 TOP_RELIABLE_VEHICLES = [
@@ -99,7 +105,7 @@ def _brand_reliability_prompt(brand: str) -> str:
 
 
 def get_reliability_rankings() -> dict:
-    year = RELIABILITY_REFERENCE_YEAR
+    year = reliability_reference_year()
     vehicles = []
     for item in TOP_RELIABLE_VEHICLES:
         make = item["make"]

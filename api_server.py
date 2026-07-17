@@ -1,14 +1,15 @@
 import json
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 from urllib.parse import quote
 
 import env_setup  # noqa: F401
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 from app_ai_core import generate_ai_vehicle_report, verify_vehicle_exists
 from buyer_report_service import (
@@ -27,8 +28,11 @@ from feedback_store import FeedbackError, submit_feedback
 from listing_deal_service import ListingDealError, evaluate_listing_deal
 from negotiation import generate_negotiation_pack
 from offer_sheet_service import OfferSheetError, analyze_offer_sheet
+from email_validation import EmailValidationError, normalize_email
+from openai_client import OpenAIConfigurationError
 from rate_limit import ApiRateLimitMiddleware
 from report_store import ReportStoreError, get_report, update_report
+from startup_checks import validate_production_config
 from stripe_service import (
     PaymentConfigurationError,
     construct_webhook_event,
@@ -44,15 +48,30 @@ from waitlist_store import WaitlistError, add_waitlist_email
 
 VEHICLES_FILE = Path(__file__).parent / "vehicles.json"
 LOCAL_ORIGINS = ["http://localhost:3000", "http://127.0.0.1:3000"]
+ASSISTANT_MAX_MESSAGE_CHARS = 2000
+ASSISTANT_MAX_HISTORY = 20
+ASSISTANT_MAX_HISTORY_CONTENT = 2000
+ASSISTANT_MAX_CRITERIA_KEYS = 40
 
 
 def _allowed_origins() -> list[str]:
     configured = os.environ.get("ALLOWED_ORIGINS", "")
     origins = [origin.strip().rstrip("/") for origin in configured.split(",") if origin.strip()]
-    return origins or LOCAL_ORIGINS
+    if origins:
+        return origins
+    if os.environ.get("ENVIRONMENT", "development").strip().lower() == "production":
+        # Startup validation should prevent this; keep a safe empty list if it slips through.
+        return []
+    return LOCAL_ORIGINS
 
 
-app = FastAPI(title="Carvest API", version="0.1.0")
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    validate_production_config()
+    yield
+
+
+app = FastAPI(title="Carvest API", version="0.1.0", lifespan=_lifespan)
 app.add_middleware(ApiRateLimitMiddleware)
 app.add_middleware(
     CORSMiddleware,
@@ -63,24 +82,85 @@ app.add_middleware(
 )
 
 
+def _coerce_year(value: Any) -> Optional[int]:
+    if value is None or value == "":
+        return None
+    try:
+        year = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("year must be a valid number") from exc
+    if year < 1980 or year > 2100:
+        raise ValueError("year must be between 1980 and 2100")
+    return year
+
+
 class VehicleQuery(BaseModel):
     make: str = ""
-    year: str = ""
+    year: Optional[int] = None
     model: str = ""
     zip_code: Optional[str] = None
     trim: Optional[str] = None
 
+    @field_validator("year", mode="before")
+    @classmethod
+    def validate_year(cls, value: Any) -> Optional[int]:
+        return _coerce_year(value)
+
 
 class AssistantChatRequest(BaseModel):
-    message: str
-    criteria: Optional[dict] = None
+    message: str = Field(..., min_length=1, max_length=ASSISTANT_MAX_MESSAGE_CHARS)
+    criteria: Optional[dict[str, Any]] = None
     history: Optional[list[dict[str, str]]] = None
+
+    @field_validator("criteria")
+    @classmethod
+    def validate_criteria(cls, value: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
+        if value is None:
+            return None
+        if not isinstance(value, dict):
+            raise ValueError("criteria must be an object")
+        if len(value) > ASSISTANT_MAX_CRITERIA_KEYS:
+            raise ValueError(
+                f"criteria cannot include more than {ASSISTANT_MAX_CRITERIA_KEYS} fields"
+            )
+        cleaned: dict[str, Any] = {}
+        for key, item in value.items():
+            key_text = str(key)[:64]
+            if isinstance(item, (str, int, float, bool)) or item is None:
+                cleaned[key_text] = item if not isinstance(item, str) else item[:200]
+            elif isinstance(item, list):
+                cleaned[key_text] = [
+                    str(entry)[:100] for entry in item[:20] if entry is not None
+                ]
+            else:
+                cleaned[key_text] = str(item)[:200]
+        return cleaned
+
+    @field_validator("history")
+    @classmethod
+    def validate_history(
+        cls, value: Optional[list[dict[str, str]]]
+    ) -> Optional[list[dict[str, str]]]:
+        if value is None:
+            return None
+        if not isinstance(value, list):
+            raise ValueError("history must be a list")
+        trimmed = value[-ASSISTANT_MAX_HISTORY:]
+        cleaned: list[dict[str, str]] = []
+        for item in trimmed:
+            if not isinstance(item, dict):
+                continue
+            role = str(item.get("role") or "")[:32]
+            content = str(item.get("content") or "")[:ASSISTANT_MAX_HISTORY_CONTENT]
+            if role and content:
+                cleaned.append({"role": role, "content": content})
+        return cleaned
 
 
 class CriteriaSearchRequest(BaseModel):
     criteria: dict
-    start: int = 0
-    rows: int = 24
+    start: int = Field(default=0, ge=0, le=1000)
+    rows: int = Field(default=24, ge=1, le=50)
 
 
 class NegotiationRequest(BaseModel):
@@ -258,7 +338,7 @@ def list_models(make: str = Query(...), year: str = Query(...)) -> list[str]:
 def search_listings(payload: VehicleQuery) -> dict:
     if payload.make and payload.model and payload.year:
         is_valid, message, canonical_make, canonical_model = verify_vehicle_exists(
-            payload.make, int(payload.year), payload.model
+            payload.make, payload.year, payload.model
         )
         if not is_valid:
             raise HTTPException(status_code=400, detail=message)
@@ -267,7 +347,7 @@ def search_listings(payload: VehicleQuery) -> dict:
             return get_market_snapshot(
                 make=canonical_make,
                 model=canonical_model,
-                year=int(payload.year),
+                year=payload.year,
                 zip_code=payload.zip_code,
                 max_listings=12,
                 max_price_predictions=4,
@@ -313,6 +393,8 @@ def create_negotiation_pack(payload: NegotiationRequest) -> dict:
                 "deal_signal": payload.deal_signal,
             }
         return generate_negotiation_pack(listing)
+    except OpenAIConfigurationError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -400,10 +482,11 @@ def create_buyer_report_preview(payload: BuyerReportPreviewRequest) -> dict:
         raise HTTPException(status_code=400, detail="Mileage cannot be negative.")
     if payload.zip_code and (len(payload.zip_code) != 5 or not payload.zip_code.isdigit()):
         raise HTTPException(status_code=400, detail="Enter a valid five-digit ZIP code.")
-    if payload.email and (
-        "@" not in payload.email or payload.email.startswith("@") or payload.email.endswith("@")
-    ):
-        raise HTTPException(status_code=400, detail="Enter a valid email address.")
+    if payload.email:
+        try:
+            payload.email = normalize_email(payload.email, required=True)
+        except EmailValidationError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
     if payload.listing_url and not payload.listing_url.startswith(("http://", "https://")):
         raise HTTPException(status_code=400, detail="Listing URL must begin with http:// or https://.")
     try:
@@ -516,6 +599,8 @@ def assistant_chat(payload: AssistantChatRequest) -> dict:
             criteria=payload.criteria,
             history=payload.history,
         )
+    except OpenAIConfigurationError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -529,13 +614,18 @@ def create_report(payload: VehicleQuery) -> dict[str, str]:
         )
 
     profile = payload.model_dump()
-    report = generate_ai_vehicle_report(
-        make=payload.make,
-        year=int(payload.year),
-        model=payload.model,
-        zip_code=payload.zip_code,
-        vehicle_profile=profile,
-    )
+    try:
+        report = generate_ai_vehicle_report(
+            make=payload.make,
+            year=payload.year,
+            model=payload.model,
+            zip_code=payload.zip_code,
+            vehicle_profile=profile,
+        )
+    except OpenAIConfigurationError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if report.startswith("Failed to connect"):
+        raise HTTPException(status_code=502, detail=report)
     if report.startswith("Error:"):
         raise HTTPException(status_code=400, detail=report)
     return {"report": report}
@@ -554,7 +644,7 @@ def create_comparison(payload: VehicleQuery) -> dict:
 
     is_valid, message, canonical_make, canonical_model = verify_vehicle_exists(
         payload.make,
-        int(payload.year),
+        payload.year,
         payload.model,
     )
     if not is_valid:
@@ -562,8 +652,11 @@ def create_comparison(payload: VehicleQuery) -> dict:
     profile["make"] = canonical_make
     profile["model"] = canonical_model
 
-    dataset = build_comparison_dataset(profile)
-    report = generate_comparison_report(profile, dataset=dataset)
+    try:
+        dataset = build_comparison_dataset(profile)
+        report = generate_comparison_report(profile, dataset=dataset)
+    except OpenAIConfigurationError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     if report.startswith("Error:"):
         raise HTTPException(status_code=400, detail=report)
 

@@ -9,15 +9,13 @@ from app_ai_core import verify_vehicle_exists
 from competitors import get_competitors, resolve_competitor_models
 from fetch_marketcheck import MarketCheckError, get_market_snapshot
 from fetch_recalls import get_live_recalls
-from openai_client import create_openai_client
+from openai_client import client
 
 if hasattr(sys.stdout, "reconfigure"):
     try:
         sys.stdout.reconfigure(encoding="utf-8")
     except Exception:
         pass
-
-client = create_openai_client()
 
 
 def _market_summary(market_data: Optional[dict[str, Any]]) -> dict[str, Any]:
@@ -110,6 +108,8 @@ def build_comparison_dataset(
     profile: dict[str, Any],
     competitor_limit: int = 4,
 ) -> dict[str, Any]:
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     make = profile["make"]
     year = int(profile["year"])
     model = profile["model"]
@@ -134,32 +134,41 @@ def build_comparison_dataset(
         max_price_predictions=2,
     )
 
-    competitors = []
-    for candidate in resolved_competitors:
+    ordered: list[Optional[dict[str, Any]]] = [None] * len(resolved_competitors)
+    verified_jobs: list[tuple[int, dict[str, Any]]] = []
+    for idx, candidate in enumerate(resolved_competitors):
         if not candidate.get("verified"):
-            competitors.append(
-                {
-                    "role": "competitor",
-                    "make": candidate["make"],
-                    "model": candidate["model"],
-                    "year": year,
-                    "verified": False,
-                    "error": candidate.get("error"),
-                }
-            )
+            ordered[idx] = {
+                "role": "competitor",
+                "make": candidate["make"],
+                "model": candidate["model"],
+                "year": year,
+                "verified": False,
+                "error": candidate.get("error"),
+            }
             continue
+        verified_jobs.append((idx, candidate))
 
-        competitors.append(
-            gather_vehicle_intel(
-                make=candidate["make"],
-                year=year,
-                model=candidate["model"],
-                zip_code=zip_code,
-                role="competitor",
-                max_listings=4,
-                max_price_predictions=1,
-            )
-        )
+    if verified_jobs:
+        max_workers = min(3, len(verified_jobs))
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            future_map = {
+                pool.submit(
+                    gather_vehicle_intel,
+                    make=candidate["make"],
+                    year=year,
+                    model=candidate["model"],
+                    zip_code=zip_code,
+                    role="competitor",
+                    max_listings=4,
+                    max_price_predictions=1,
+                ): idx
+                for idx, candidate in verified_jobs
+            }
+            for future in as_completed(future_map):
+                ordered[future_map[future]] = future.result()
+
+    competitors = [row for row in ordered if row is not None]
 
     return {
         "target_profile": profile,

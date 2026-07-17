@@ -18,6 +18,8 @@ USER_AGENT = os.environ.get(
     "Carvest/1.0 (vehicle research education; contact=support@carvest.local)",
 )
 TTL_SECONDS = int(os.environ.get("REFERENCE_IMAGE_TTL_SECONDS", "2592000"))  # 30 days
+MISSING_TTL_SECONDS = int(os.environ.get("REFERENCE_IMAGE_MISSING_TTL_SECONDS", "900"))
+MAX_IMAGE_BYTES = int(os.environ.get("REFERENCE_IMAGE_MAX_BYTES", str(5 * 1024 * 1024)))
 # Wikimedia only serves these thumb widths for direct requests (see https://w.wiki/GHai).
 _WIKIMEDIA_THUMB_STEPS = (20, 40, 60, 120, 250, 330, 500, 960, 1280, 1920, 3840)
 _REFERENCE_IMAGE_WIDTH = int(os.environ.get("REFERENCE_IMAGE_WIDTH", "960"))
@@ -101,7 +103,12 @@ def _upgrade_wikimedia_url(url: str, desired_width: Optional[int] = None) -> str
     return url
 
 
-def _wikipedia_thumbnail(title: str) -> Optional[str]:
+def _wikipedia_thumbnail(title: str) -> tuple[Optional[str], bool]:
+    """Return (image_url_or_none, lookup_succeeded).
+
+    lookup_succeeded is False on transport/parse failures so callers can avoid
+    caching transient misses for a full day.
+    """
     url = WIKIPEDIA_SUMMARY.format(title=quote(title.replace(" ", "_"), safe="_()-"))
     try:
         response = requests.get(
@@ -112,11 +119,13 @@ def _wikipedia_thumbnail(title: str) -> Optional[str]:
             },
             timeout=float(os.environ.get("REFERENCE_IMAGE_TIMEOUT_SECONDS", "6")),
         )
+        if response.status_code == 404:
+            return None, True
         if response.status_code != 200:
-            return None
+            return None, False
         body = response.json()
     except (requests.RequestException, ValueError):
-        return None
+        return None, False
 
     thumbnail = body.get("thumbnail") or {}
     source = thumbnail.get("source")
@@ -124,8 +133,8 @@ def _wikipedia_thumbnail(title: str) -> Optional[str]:
         original = body.get("originalimage") or {}
         source = original.get("source")
     if not source or not str(source).startswith("http"):
-        return None
-    return _upgrade_wikimedia_url(str(source))
+        return None, True
+    return _upgrade_wikimedia_url(str(source)), True
 
 
 def _imagin_url(make: str, model: str, year: Optional[int]) -> Optional[str]:
@@ -171,10 +180,14 @@ def get_reference_image(
 
     photo: Optional[str] = None
     source = "wikipedia"
+    confirmed_miss = False
     for title in _title_candidates(make, model, year):
-        photo = _wikipedia_thumbnail(title)
-        if photo:
+        candidate, lookup_ok = _wikipedia_thumbnail(title)
+        if candidate:
+            photo = candidate
             break
+        if lookup_ok:
+            confirmed_miss = True
 
     if not photo:
         imagin = _imagin_url(make, model, year)
@@ -183,7 +196,9 @@ def get_reference_image(
             source = "imagin"
 
     if not photo:
-        set_json(cache_key, {"missing": True}, min(TTL_SECONDS, 86400))
+        # Only cache misses after at least one confirmed provider response.
+        if confirmed_miss:
+            set_json(cache_key, {"missing": True}, min(TTL_SECONDS, MISSING_TTL_SECONDS))
         return None
 
     payload = {
@@ -248,9 +263,27 @@ def fetch_reference_image_bytes(
         str(source_url),
         headers={"User-Agent": USER_AGENT, "Accept": "image/*,*/*"},
         timeout=float(os.environ.get("REFERENCE_IMAGE_TIMEOUT_SECONDS", "8")),
+        stream=True,
     )
     response.raise_for_status()
+    content_length = response.headers.get("Content-Length")
+    if content_length and content_length.isdigit() and int(content_length) > MAX_IMAGE_BYTES:
+        response.close()
+        raise ValueError("Reference image exceeds size limit.")
+
+    chunks: list[bytes] = []
+    total = 0
+    for chunk in response.iter_content(chunk_size=65536):
+        if not chunk:
+            continue
+        total += len(chunk)
+        if total > MAX_IMAGE_BYTES:
+            response.close()
+            raise ValueError("Reference image exceeds size limit.")
+        chunks.append(chunk)
+    response.close()
+
     content_type = response.headers.get("Content-Type", "image/jpeg").split(";")[0].strip()
     if not content_type.startswith("image/"):
         content_type = "image/jpeg"
-    return response.content, content_type
+    return b"".join(chunks), content_type

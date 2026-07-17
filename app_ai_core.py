@@ -6,16 +6,13 @@ import env_setup  # noqa: F401
 # Import the live government recall tool you created in fetch_recalls.py
 from fetch_recalls import get_live_recalls, recalls_available
 from fetch_marketcheck import MarketCheckError, get_market_snapshot
-from openai_client import create_openai_client
+from openai_client import client
 
 if hasattr(sys.stdout, "reconfigure"):
     try:
         sys.stdout.reconfigure(encoding="utf-8")
     except Exception:
         pass
-
-# Initialize OpenAI client (Make sure your OPENAI_API_KEY environment variable is set)
-client = create_openai_client()
 
 _VEHICLES_DB: dict | None = None
 _VEHICLES_DB_PATH = str(Path(__file__).resolve().parent / "vehicles.json")

@@ -193,7 +193,7 @@ def predict_market_price(
         },
     )
 
-    predicted_price = (
+    predicted_price = _to_float(
         data.get("marketcheck_price")
         or data.get("predicted_price")
         or data.get("price")
@@ -203,10 +203,26 @@ def predict_market_price(
         "vin": vin,
         "miles": miles,
         "predicted_price": predicted_price,
-        "msrp": data.get("msrp"),
+        "msrp": _to_float(data.get("msrp")),
         "comparables_count": len(data.get("comparables", []) or data.get("listings", []) or []),
         "raw": data,
     }
+
+
+def _to_float(value: Any) -> Optional[float]:
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _to_int(value: Any) -> Optional[int]:
+    number = _to_float(value)
+    if number is None:
+        return None
+    return int(number)
 
 
 def enrich_listings_with_pricing(
@@ -215,21 +231,29 @@ def enrich_listings_with_pricing(
     max_predictions: int = 3,
 ) -> list[dict[str, Any]]:
     enriched = []
+    prediction_attempts = 0
 
     for listing in listings:
         row = dict(listing)
         vin = row.get("vin")
-        miles = row.get("miles")
-        price = row.get("price")
+        miles = _to_int(row.get("miles"))
+        price = _to_float(row.get("price"))
+        if miles is not None:
+            row["miles"] = miles
+        if price is not None:
+            row["price"] = price
 
         if (
             vin
             and miles is not None
-            and len([item for item in enriched if item.get("price_analysis")]) < max_predictions
+            and prediction_attempts < max_predictions
         ):
+            prediction_attempts += 1
             try:
-                prediction = predict_market_price(vin=vin, miles=int(miles), zip_code=zip_code)
-                predicted_price = prediction.get("predicted_price")
+                prediction = predict_market_price(
+                    vin=vin, miles=miles, zip_code=zip_code
+                )
+                predicted_price = _to_float(prediction.get("predicted_price"))
                 if predicted_price is not None and price is not None:
                     row["price_analysis"] = {
                         "predicted_fair_price": predicted_price,
@@ -246,7 +270,7 @@ def enrich_listings_with_pricing(
 
 
 def _deal_signal(listing_price: float, predicted_price: float) -> str:
-    delta = listing_price - predicted_price
+    delta = float(listing_price) - float(predicted_price)
     if delta <= -1500:
         return "LIKELY_GOOD_DEAL"
     if delta >= 1500:

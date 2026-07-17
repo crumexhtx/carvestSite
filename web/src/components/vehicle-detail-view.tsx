@@ -6,10 +6,11 @@ import { DealBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { features } from "@/lib/features";
+import { sanitizeExternalUrl } from "@/lib/safe-url";
 import { formatCurrency, formatNumber } from "@/lib/utils";
 
 type VehicleDetailProps = {
-  id: string;
+  id?: string;
   heading: string;
   price: number;
   miles: number;
@@ -30,7 +31,6 @@ type VehicleDetailProps = {
 };
 
 export function VehicleDetailView({
-  id,
   heading,
   price,
   miles,
@@ -49,6 +49,7 @@ export function VehicleDetailView({
   fairPrice,
   priceDelta,
 }: VehicleDetailProps) {
+  const safeVdp = sanitizeExternalUrl(vdp);
   return (
     <main className="mx-auto max-w-6xl p-4 md:p-6 lg:p-8">
       <Link href="/search?mode=results" className="text-sm text-slate-500 transition hover:text-violet-700">
@@ -116,9 +117,9 @@ export function VehicleDetailView({
               </p>
             )}
             <div className="flex flex-wrap gap-3">
-              {vdp ? (
+              {safeVdp ? (
                 <Button asChild>
-                  <a href={vdp} target="_blank" rel="noreferrer">
+                  <a href={safeVdp} target="_blank" rel="noopener noreferrer">
                     View Dealer Listing
                   </a>
                 </Button>
@@ -134,7 +135,7 @@ export function VehicleDetailView({
                       ...(price ? { price: String(price) } : {}),
                       ...(miles ? { miles: String(miles) } : {}),
                       ...(zipCode ? { zip: zipCode } : {}),
-                      ...(vdp ? { url: vdp } : {}),
+                      ...(safeVdp ? { url: safeVdp } : {}),
                     }).toString()}`}
                   >
                     Check Listing Deal

@@ -129,7 +129,8 @@
             {"make": "Toyota", "model": "Corolla"},
             {"make": "Honda", "model": "Civic"},
             {"make": "Hyundai", "model": "Elantra"},
-            {"make": "Nissan", "model": "Sentra"}
+            {"make": "Nissan", "model": "Sentra"},
+            {"make": "Mazda", "model": "Mazda3"}
         ],
         "compact_suv": [
             {"make": "Toyota", "model": "RAV4"},
