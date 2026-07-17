@@ -40,6 +40,14 @@ def collect_production_config_errors() -> list[str]:
     if not os.environ.get("REPORT_ACCESS_SECRET", "").strip():
         errors.append("REPORT_ACCESS_SECRET must be set in production.")
 
+    if not (
+        os.environ.get("LISTING_TRUST_SECRET", "").strip()
+        or os.environ.get("REPORT_ACCESS_SECRET", "").strip()
+    ):
+        errors.append(
+            "LISTING_TRUST_SECRET or REPORT_ACCESS_SECRET must be set in production."
+        )
+
     return errors
 
 

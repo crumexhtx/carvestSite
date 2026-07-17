@@ -268,7 +268,7 @@ def build_full_report(report_id: str) -> dict[str, Any]:
     try:
         frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000").rstrip("/")
         token = access_token_for(report_id)
-        report_url = f"{frontend_url}/report/{report_id}?token={quote(token)}"
+        report_url = f"{frontend_url}/report/{report_id}#token={quote(token)}"
         send_report_ready_email(
             recipient=record.get("email"),
             vehicle_name=_vehicle_name(vehicle),

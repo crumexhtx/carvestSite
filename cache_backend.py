@@ -38,6 +38,15 @@ def _upstash_config() -> Optional[tuple[str, str]]:
     return None
 
 
+def upstash_configured() -> bool:
+    return _upstash_config() is not None
+
+
+def upstash_command(command: list[Any]) -> Any:
+    """Public helper for non-cache Redis commands (e.g. rate limiting)."""
+    return _upstash_command(command)
+
+
 def _sqlite_path() -> Path:
     configured = os.environ.get("CACHE_SQLITE_PATH", "").strip()
     if configured:

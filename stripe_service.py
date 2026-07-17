@@ -56,6 +56,9 @@ def create_checkout_session(report_id: str, token: str) -> dict[str, Any]:
         line_items=[line_item],
         customer_email=record.get("email") or None,
         metadata={"report_id": report_id},
+        # Stripe redirects drop URL fragments, so the token must stay in the query
+        # for checkout return. The report page immediately moves it to sessionStorage
+        # and strips it from the address bar.
         success_url=(
             f"{frontend_url}/report/{report_id}?token={quote(token)}"
             "&checkout=success&session_id={CHECKOUT_SESSION_ID}"

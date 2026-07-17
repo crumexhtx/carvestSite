@@ -24,6 +24,9 @@ type NegotiationPanelProps = {
   dealSignal?: string;
   predictedFairPrice?: number;
   priceDelta?: number;
+  listingId?: string;
+  vdpUrl?: string;
+  trustSig?: string;
 };
 
 export function NegotiationPanel(props: NegotiationPanelProps) {
@@ -45,6 +48,9 @@ export function NegotiationPanel(props: NegotiationPanelProps) {
         dealSignal: props.dealSignal,
         predictedFairPrice: props.predictedFairPrice,
         priceDelta: props.priceDelta,
+        listingId: props.listingId,
+        vdpUrl: props.vdpUrl,
+        trustSig: props.trustSig,
       }),
     [props],
   );
@@ -93,6 +99,10 @@ export function NegotiationPanel(props: NegotiationPanelProps) {
         predicted_fair_price: props.predictedFairPrice,
         listing_price: props.price,
         price_delta: props.priceDelta,
+        listing_id: props.listingId,
+        // Must match the signed snapshot (raw listing VDP), not a rewritten href.
+        vdp_url: props.vdpUrl,
+        trust_sig: props.trustSig,
       });
       if (
         requestId !== requestIdRef.current ||

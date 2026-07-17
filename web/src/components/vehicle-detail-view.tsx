@@ -1,11 +1,15 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
 import { NegotiationPanel } from "@/components/negotiation-panel";
 import { DealBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { features } from "@/lib/features";
+import { verifyListingTrust } from "@/lib/api";
 import { sanitizeExternalUrl } from "@/lib/safe-url";
 import { formatCurrency, formatNumber } from "@/lib/utils";
 
@@ -28,6 +32,8 @@ type VehicleDetailProps = {
   year: number;
   fairPrice: number;
   priceDelta: number;
+  listingId?: string;
+  trustSig?: string;
 };
 
 export function VehicleDetailView({
@@ -48,20 +54,78 @@ export function VehicleDetailView({
   year,
   fairPrice,
   priceDelta,
+  listingId,
+  trustSig,
 }: VehicleDetailProps) {
   const safeVdp = sanitizeExternalUrl(vdp);
+  const safePhoto = sanitizeExternalUrl(photo);
+  const [trusted, setTrusted] = useState<boolean | null>(trustSig ? null : false);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!trustSig) {
+      queueMicrotask(() => {
+        if (!cancelled) setTrusted(false);
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    verifyListingTrust({
+      listing_id: listingId || undefined,
+      vin: vin || undefined,
+      price: price || undefined,
+      miles: miles || undefined,
+      // Verify against the original query VDP, not the sanitized display href.
+      vdp_url: vdp || undefined,
+      predicted_fair_price: fairPrice || undefined,
+      deal_signal: signal || undefined,
+      dealer_name: dealer || undefined,
+      trust_sig: trustSig,
+    })
+      .then((result) => {
+        if (!cancelled) setTrusted(result.valid);
+      })
+      .catch(() => {
+        if (!cancelled) setTrusted(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    trustSig,
+    listingId,
+    vin,
+    price,
+    miles,
+    vdp,
+    fairPrice,
+    signal,
+    dealer,
+  ]);
+
   return (
     <main className="mx-auto max-w-6xl p-4 md:p-6 lg:p-8">
       <Link href="/search?mode=results" className="text-sm text-slate-500 transition hover:text-violet-700">
         ← Back to listings
       </Link>
 
+      {trusted === false ? (
+        <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950">
+          This listing snapshot could not be verified. Prices and dealer links may have
+          been altered in the URL. Open the vehicle from your search results again before
+          negotiating.
+        </div>
+      ) : null}
+
       <div className="mt-8 grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
         <Card className="overflow-hidden">
           <div className="relative aspect-[16/10] bg-card-subtle">
-            {photo ? (
+            {safePhoto ? (
               <Image
-                src={photo}
+                src={safePhoto}
                 alt={heading}
                 fill
                 className="object-cover"
@@ -117,7 +181,7 @@ export function VehicleDetailView({
               </p>
             )}
             <div className="flex flex-wrap gap-3">
-              {safeVdp ? (
+              {safeVdp && trusted !== false ? (
                 <Button asChild>
                   <a href={safeVdp} target="_blank" rel="noopener noreferrer">
                     View Dealer Listing
@@ -127,7 +191,7 @@ export function VehicleDetailView({
               <Button variant="outline" asChild>
                 <Link href="/">Research Similar Cars</Link>
               </Button>
-              {vin || price ? (
+              {trusted !== false && (vin || price) ? (
                 <Button variant="outline" asChild>
                   <Link
                     href={`/listing-deal?${new URLSearchParams({
@@ -162,23 +226,33 @@ export function VehicleDetailView({
       </div>
 
       <div className="mt-8">
-        <NegotiationPanel
-          heading={heading}
-          price={price}
-          miles={miles || undefined}
-          vin={vin || undefined}
-          zipCode={zipCode || undefined}
-          make={make || undefined}
-          model={model || undefined}
-          year={year || undefined}
-          dom={dom || undefined}
-          dealerName={dealer || undefined}
-          city={city || undefined}
-          state={state || undefined}
-          dealSignal={signal || undefined}
-          predictedFairPrice={fairPrice || undefined}
-          priceDelta={priceDelta || undefined}
-        />
+        {trusted ? (
+          <NegotiationPanel
+            heading={heading}
+            price={price}
+            miles={miles || undefined}
+            vin={vin || undefined}
+            zipCode={zipCode || undefined}
+            make={make || undefined}
+            model={model || undefined}
+            year={year || undefined}
+            dom={dom || undefined}
+            dealerName={dealer || undefined}
+            city={city || undefined}
+            state={state || undefined}
+            dealSignal={signal || undefined}
+            predictedFairPrice={fairPrice || undefined}
+            priceDelta={priceDelta || undefined}
+            listingId={listingId || undefined}
+            vdpUrl={vdp || undefined}
+            trustSig={trustSig || undefined}
+          />
+        ) : (
+          <div className="maskara-glass rounded-2xl p-6 text-sm text-slate-600">
+            Negotiation tools unlock after the listing snapshot is verified from a Carvest
+            search result.
+          </div>
+        )}
       </div>
     </main>
   );
