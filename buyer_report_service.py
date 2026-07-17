@@ -6,7 +6,7 @@ from urllib.parse import quote
 from app_ai_core import generate_ai_vehicle_report, verify_vehicle_exists
 from email_service import send_report_ready_email
 from fetch_marketcheck import MarketCheckError, predict_market_price
-from fetch_recalls import get_live_recalls
+from fetch_recalls import get_live_recalls, recalls_available
 from negotiation import generate_negotiation_pack
 from report_store import (
     access_token_for,
@@ -51,7 +51,13 @@ def _inspection_checklist(recalls: dict[str, Any]) -> list[str]:
         "Verify title status, ownership history, odometer consistency, and service records.",
         "Measure tire tread and brake wear, and inspect underneath for leaks or collision repairs.",
     ]
-    if components:
+    if recalls.get("available") is False or recalls.get("error"):
+        checklist.insert(
+            1,
+            "Model-year recall lookup was unavailable during report generation — "
+            "confirm open recalls for this exact VIN before leaving a deposit.",
+        )
+    elif components:
         checklist.insert(
             1,
             f"Ask the inspector to focus on recalled systems: {', '.join(components[:3])}.",
@@ -69,12 +75,13 @@ def create_preview(
     listing_url: Optional[str] = None,
 ) -> dict[str, Any]:
     vehicle = decode_vin(vin)
-    is_valid, _, canonical_model = verify_vehicle_exists(
+    is_valid, _, canonical_make, canonical_model = verify_vehicle_exists(
         vehicle["make"],
         vehicle["year"],
         vehicle["model"],
     )
-    if is_valid and canonical_model:
+    if is_valid and canonical_make and canonical_model:
+        vehicle["make"] = canonical_make
         vehicle["model"] = canonical_model
     vehicle["catalog_verified"] = bool(is_valid)
 
@@ -85,8 +92,23 @@ def create_preview(
         verbose=False,
     )
     recall_rows = recalls.get("recalls_list") or []
-    recall_count = int(recalls.get("total_recalls_count") or 0)
+    recall_lookup_ok = recalls_available(recalls)
+    recall_count = (
+        int(recalls.get("total_recalls_count") or 0) if recall_lookup_ok else None
+    )
     top_component = recall_rows[0].get("Component") if recall_rows else None
+    if recall_lookup_ok:
+        recall_summary = (
+            f"It has {recall_count} recorded recall campaign"
+            f"{'' if recall_count == 1 else 's'} for this model year."
+            if recall_count
+            else "No recall campaigns were returned for this model year."
+        )
+    else:
+        recall_summary = (
+            "Model-year recall lookup is temporarily unavailable — "
+            "confirm open recalls for this exact VIN before buying."
+        )
 
     request_data = {
         "vin": vehicle["vin"],
@@ -103,15 +125,11 @@ def create_preview(
         "mileage": mileage,
         "zip_code": zip_code,
         "recall_count": recall_count,
+        "recalls_available": recall_lookup_ok,
         "top_recall_component": top_component,
         "summary": (
             f"NHTSA decoded this VIN as a {_vehicle_name(vehicle)}. "
-            + (
-                f"It has {recall_count} recorded recall campaign"
-                f"{'' if recall_count == 1 else 's'} for this model year."
-                if recall_count
-                else "No recall campaigns were returned for this model year."
-            )
+            + recall_summary
         ),
         "visible_sections": [
             "VIN identity",
@@ -215,7 +233,11 @@ def build_full_report(report_id: str) -> dict[str, Any]:
                 "year": vehicle["year"],
                 "price_analysis": price_analysis,
             }
-            negotiation_pack = generate_negotiation_pack(negotiation_input)
+            # Negotiation guidance should never abort a paid report.
+            try:
+                negotiation_pack = generate_negotiation_pack(negotiation_input)
+            except Exception:
+                negotiation_pack = None
 
         recalls = get_live_recalls(
             vehicle["make"],
@@ -234,7 +256,16 @@ def build_full_report(report_id: str) -> dict[str, Any]:
             "generated_at": time.time(),
         }
         updated = update_report(report_id, status="ready", full_json=full_report)
+    except Exception as exc:
+        update_report(
+            report_id,
+            status="failed",
+            full_json={"error": str(exc)},
+        )
+        raise
 
+    # Email is best-effort and must never flip a ready report to failed.
+    try:
         frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000").rstrip("/")
         token = access_token_for(report_id)
         report_url = f"{frontend_url}/report/{report_id}?token={quote(token)}"
@@ -243,14 +274,9 @@ def build_full_report(report_id: str) -> dict[str, Any]:
             vehicle_name=_vehicle_name(vehicle),
             report_url=report_url,
         )
-        return updated
-    except Exception as exc:
-        update_report(
-            report_id,
-            status="failed",
-            full_json={"error": str(exc)},
-        )
-        raise
+    except Exception:
+        pass
+    return updated
 
 
 def mark_report_paid(

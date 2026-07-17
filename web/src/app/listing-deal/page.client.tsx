@@ -316,7 +316,11 @@ function ListingDealResults({ result }: { result: ListingDealEvaluation }) {
           />
           <Metric
             label="Recall campaigns"
-            value={String(result.recall_count)}
+            value={
+              result.recalls_available === false || result.recall_count == null
+                ? "Unavailable"
+                : String(result.recall_count)
+            }
           />
         </div>
       </div>

@@ -66,7 +66,8 @@ export type BuyerReportPreview = {
   listing_price?: number | null;
   mileage?: number | null;
   zip_code?: string | null;
-  recall_count: number;
+  recall_count: number | null;
+  recalls_available?: boolean;
   top_recall_component?: string | null;
   summary: string;
   visible_sections: string[];
@@ -93,8 +94,10 @@ export type BuyerReportFull = {
     deal_signal?: string | null;
   } | null;
   recalls?: {
-    total_recalls_count?: number;
+    available?: boolean;
+    total_recalls_count?: number | null;
     recalls_list?: Array<Record<string, string>>;
+    error?: string;
   };
   inspection_checklist?: string[];
   negotiation_pack?: NegotiationPack | null;
@@ -173,7 +176,8 @@ export type ListingDealEvaluation = {
     deal_signal?: string | null;
   } | null;
   market_note: string;
-  recall_count: number;
+  recall_count: number | null;
+  recalls_available?: boolean;
   loan: {
     down_payment: number;
     amount_financed: number;

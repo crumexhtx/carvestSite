@@ -74,3 +74,37 @@ def construct_webhook_event(payload: bytes, signature: str) -> Any:
     if not webhook_secret:
         raise PaymentConfigurationError("STRIPE_WEBHOOK_SECRET is not configured.")
     return stripe.Webhook.construct_event(payload, signature, webhook_secret)
+
+
+def validate_checkout_session_for_report(
+    session: dict[str, Any],
+    record: dict[str, Any],
+) -> None:
+    """Reject webhook unlocks that do not match the stored report checkout."""
+    payment_status = str(session.get("payment_status") or "").strip().lower()
+    if payment_status != "paid":
+        raise PaymentConfigurationError(
+            f"Stripe session is not paid (status={payment_status or 'unknown'})."
+        )
+
+    session_id = str(session.get("id") or "").strip()
+    if not session_id:
+        raise PaymentConfigurationError("Stripe session is missing an id.")
+
+    stored_session = str(record.get("stripe_session_id") or "").strip()
+    if stored_session and stored_session != session_id:
+        raise PaymentConfigurationError("Stripe session does not match this report.")
+
+    currency = str(session.get("currency") or "").strip().lower()
+    if currency and currency != "usd":
+        raise PaymentConfigurationError(f"Unexpected Stripe currency: {currency}.")
+
+    # When Checkout uses ad-hoc price_data, amount must match the configured report price.
+    # When STRIPE_PRICE_ID is set, trust that catalog price and skip amount matching.
+    price_id = os.environ.get("STRIPE_PRICE_ID", "").strip()
+    amount_total = session.get("amount_total")
+    if not price_id and amount_total is not None:
+        if int(amount_total) != int(REPORT_PRICE_CENTS):
+            raise PaymentConfigurationError(
+                f"Unexpected Stripe amount: {amount_total} (expected {REPORT_PRICE_CENTS})."
+            )

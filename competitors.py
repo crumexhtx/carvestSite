@@ -77,7 +77,7 @@ def resolve_competitor_models(
 
     for candidate in lookup["competitors"]:
         resolved_model = resolve_model_alias(candidate["make"], candidate["model"], year)
-        is_valid, message, canonical_model = verify_fn(
+        is_valid, message, canonical_make, canonical_model = verify_fn(
             candidate["make"],
             year,
             resolved_model,
@@ -85,7 +85,7 @@ def resolve_competitor_models(
         if is_valid:
             resolved.append(
                 {
-                    "make": candidate["make"],
+                    "make": canonical_make,
                     "model": canonical_model,
                     "display_model": candidate["model"],
                     "year": year,

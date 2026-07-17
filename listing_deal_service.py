@@ -7,7 +7,7 @@ from typing import Any, Optional
 from app_ai_core import verify_vehicle_exists
 from feature_flags import monetization_enabled
 from fetch_marketcheck import MarketCheckError, predict_market_price
-from fetch_recalls import get_live_recalls
+from fetch_recalls import get_live_recalls, recalls_available
 from vin_decode import VinDecodeError, decode_vin
 
 
@@ -132,12 +132,13 @@ def evaluate_listing_deal(
     except VinDecodeError as exc:
         raise ListingDealError(str(exc)) from exc
 
-    is_valid, _, canonical_model = verify_vehicle_exists(
+    is_valid, _, canonical_make, canonical_model = verify_vehicle_exists(
         vehicle["make"],
         vehicle["year"],
         vehicle["model"],
     )
-    if is_valid and canonical_model:
+    if is_valid and canonical_make and canonical_model:
+        vehicle["make"] = canonical_make
         vehicle["model"] = canonical_model
     vehicle["catalog_verified"] = bool(is_valid)
 
@@ -169,7 +170,10 @@ def evaluate_listing_deal(
         vehicle["model"],
         verbose=False,
     )
-    recall_count = int(recalls.get("total_recalls_count") or 0)
+    recall_lookup_ok = recalls_available(recalls)
+    recall_count = (
+        int(recalls.get("total_recalls_count") or 0) if recall_lookup_ok else None
+    )
 
     amount_financed = round(float(listing_price) - float(down_payment), 2)
     selected_tier = CREDIT_TIERS[credit_tier]
@@ -215,6 +219,7 @@ def evaluate_listing_deal(
     recommendation = _recommendation_copy(
         price_analysis=price_analysis,
         recall_count=recall_count,
+        recalls_available_flag=recall_lookup_ok,
         ownership=ownership,
         down_payment=float(down_payment),
         listing_price=float(listing_price),
@@ -231,6 +236,7 @@ def evaluate_listing_deal(
         "price_analysis": price_analysis,
         "market_note": market_note,
         "recall_count": recall_count,
+        "recalls_available": recall_lookup_ok,
         "loan": {
             "down_payment": float(down_payment),
             "amount_financed": amount_financed,
@@ -295,7 +301,8 @@ def _next_steps(*, listing_price: float, vin: str) -> list[dict[str, str]]:
 def _recommendation_copy(
     *,
     price_analysis: Optional[dict[str, Any]],
-    recall_count: int,
+    recall_count: Optional[int],
+    recalls_available_flag: bool,
     ownership: dict[str, Any],
     down_payment: float,
     listing_price: float,
@@ -336,7 +343,12 @@ def _recommendation_copy(
         tips.append(
             "A larger down payment lowers monthly cost and can improve loan approval odds."
         )
-    if recall_count:
+    if not recalls_available_flag:
+        tips.append(
+            "Model-year recall lookup was unavailable — verify open recalls for the "
+            "exact VIN with NHTSA or a franchised dealer before buying."
+        )
+    elif recall_count:
         tips.append(
             f"This model year shows {recall_count} recall campaign"
             f"{'' if recall_count == 1 else 's'}—confirm open recalls for the exact VIN."

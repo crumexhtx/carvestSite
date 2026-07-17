@@ -39,7 +39,7 @@ class ListingDealTests(unittest.TestCase):
             patch("listing_deal_service.decode_vin", return_value=vehicle),
             patch(
                 "listing_deal_service.verify_vehicle_exists",
-                return_value=(True, "ok", "Accord"),
+                return_value=(True, "ok", "Honda", "Accord"),
             ),
             patch(
                 "listing_deal_service.predict_market_price",
@@ -47,7 +47,11 @@ class ListingDealTests(unittest.TestCase):
             ),
             patch(
                 "listing_deal_service.get_live_recalls",
-                return_value={"total_recalls_count": 2, "recalls_list": []},
+                return_value={
+                    "available": True,
+                    "total_recalls_count": 2,
+                    "recalls_list": [],
+                },
             ),
         ):
             result = evaluate_listing_deal(

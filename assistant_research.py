@@ -286,14 +286,22 @@ def _pick_recall_years(criteria: dict[str, Any], message: str) -> list[int]:
 
 
 def _recall_row_for_year(make: str, model: str, year: int) -> Optional[dict[str, Any]]:
-    is_valid, _, canonical = verify_vehicle_exists(make, year, model)
+    is_valid, _, canonical_make, canonical = verify_vehicle_exists(make, year, model)
     if not is_valid:
         return None
 
-    recalls = get_live_recalls(make, year, canonical, verbose=False)
+    recalls = get_live_recalls(canonical_make, year, canonical, verbose=False)
+    if recalls.get("available") is False or recalls.get("error"):
+        return {
+            "year": year,
+            "recall_count": None,
+            "recalls_available": False,
+            "recalls": [],
+        }
     return {
         "year": year,
         "recall_count": recalls.get("total_recalls_count", 0),
+        "recalls_available": True,
         "recalls": recalls.get("recalls_list", [])[:3],
     }
 
@@ -392,16 +400,25 @@ def build_research_bundle(criteria: dict[str, Any], message: str) -> dict[str, A
         make = criteria["make"]
         model = criteria["model"]
         recall_rows = _recalls_for_years(make, model, criteria, message)
-        low_recall = sorted(recall_rows, key=lambda row: row["recall_count"], reverse=True)[:3]
-        high_recall = sorted(recall_rows, key=lambda row: row["recall_count"], reverse=True)[:3]
+        available_rows = [
+            row for row in recall_rows if isinstance(row.get("recall_count"), int)
+        ]
+        high_recall = sorted(
+            available_rows, key=lambda row: row["recall_count"], reverse=True
+        )[:3]
         sample_year = _research_year(criteria)
         bundle["model_deep_dive"] = {
             "make": make,
             "model": model,
             "competitors": get_competitors(make, model).get("people_also_shop", []),
             "recalls_by_year": recall_rows,
-            "years_to_consider": [row["year"] for row in sorted(recall_rows, key=lambda r: r["recall_count"])[:3]],
-            "years_to_scrutinize": [row["year"] for row in low_recall if row["recall_count"] >= 3],
+            "years_to_consider": [
+                row["year"]
+                for row in sorted(available_rows, key=lambda r: r["recall_count"])[:3]
+            ],
+            "years_to_scrutinize": [
+                row["year"] for row in high_recall if row["recall_count"] >= 3
+            ],
             "sample_listing": _sample_listing(make, model, sample_year, zip_code),
         }
         return bundle
@@ -409,24 +426,26 @@ def build_research_bundle(criteria: dict[str, Any], message: str) -> dict[str, A
     for candidate in candidates:
         sample_year = _research_year(criteria, candidate)
         display_year = _display_year(criteria, candidate)
-        is_valid, _, canonical = verify_vehicle_exists(
+        is_valid, _, canonical_make, canonical = verify_vehicle_exists(
             candidate["make"], sample_year, candidate["model"]
         )
         if not is_valid:
             continue
 
-        recalls = get_live_recalls(candidate["make"], sample_year, canonical, verbose=False)
-        listing = _sample_listing(candidate["make"], canonical, sample_year, zip_code)
+        recalls = get_live_recalls(canonical_make, sample_year, canonical, verbose=False)
+        listing = _sample_listing(canonical_make, canonical, sample_year, zip_code)
+        recall_ok = not (recalls.get("available") is False or recalls.get("error"))
         bundle["candidate_models"].append(
             {
-                "make": candidate["make"],
+                "make": canonical_make,
                 "model": canonical,
                 "trim": candidate.get("trim"),
                 "sample_year": sample_year,
                 "display_year": display_year,
                 "positioning_note": candidate.get("note") or candidate.get("angle"),
-                "recall_count": recalls.get("total_recalls_count", 0),
-                "top_recalls": recalls.get("recalls_list", [])[:2],
+                "recall_count": recalls.get("total_recalls_count") if recall_ok else None,
+                "recalls_available": recall_ok,
+                "top_recalls": recalls.get("recalls_list", [])[:2] if recall_ok else [],
                 "sample_listing": listing,
             }
         )
@@ -552,17 +571,21 @@ def _competitor_summary(
     make: str,
     model: str,
     bundle: dict[str, Any],
-    recall_count: int,
+    recall_count: Optional[int],
 ) -> str:
     dive = bundle.get("model_deep_dive") or {}
     focus_make = dive.get("make")
     focus_model = dive.get("model")
+    if recall_count is None:
+        recall_phrase = "Recall data unavailable for the sample year."
+    else:
+        recall_phrase = f"{recall_count} active recalls on the sample year."
     if focus_make and focus_model:
         return (
             f"Cross-shopped rival to the {focus_make} {focus_model}. "
-            f"{recall_count} active recalls on the sample year."
+            f"{recall_phrase}"
         )
-    return f"Popular alternative in this segment. {recall_count} active recalls on the sample year."
+    return f"Popular alternative in this segment. {recall_phrase}"
 
 
 def build_competitor_highlights(
@@ -594,13 +617,15 @@ def build_competitor_highlights(
 
         sample_year = _research_year(criteria, candidate)
         display_year = _display_year(criteria, candidate)
-        is_valid, _, canonical = verify_vehicle_exists(make, sample_year, model)
+        is_valid, _, canonical_make, canonical = verify_vehicle_exists(make, sample_year, model)
         if not is_valid:
             continue
 
-        recalls = get_live_recalls(make, sample_year, canonical, verbose=False)
-        listing = _sample_listing(make, canonical, sample_year, zip_code)
-        recall_count = recalls.get("total_recalls_count", 0)
+        recalls = get_live_recalls(canonical_make, sample_year, canonical, verbose=False)
+        listing = _sample_listing(canonical_make, canonical, sample_year, zip_code)
+        recall_ok = not (recalls.get("available") is False or recalls.get("error"))
+        recall_count = recalls.get("total_recalls_count", 0) if recall_ok else None
+        make = canonical_make
         photo_meta = resolve_vehicle_photo(
             listing.get("photo"),
             make,

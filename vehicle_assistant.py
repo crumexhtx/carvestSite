@@ -235,13 +235,14 @@ def _normalize_criteria(criteria: dict[str, Any]) -> dict[str, Any]:
         normalized["body_type"] = "SUV"
 
     if normalized.get("make") and normalized.get("model") and normalized.get("year"):
-        is_valid, _, canonical = verify_vehicle_exists(
+        is_valid, _, canonical_make, canonical_model = verify_vehicle_exists(
             normalized["make"],
             int(normalized["year"]),
             normalized["model"],
         )
         if is_valid:
-            normalized["model"] = canonical
+            normalized["make"] = canonical_make
+            normalized["model"] = canonical_model
 
     # Auto-apply drivetrain when the model only has one realistic option (e.g. Prius = FWD).
     if (
