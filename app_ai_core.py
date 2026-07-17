@@ -1,9 +1,10 @@
 import json
 import sys
+from pathlib import Path
 
 import env_setup  # noqa: F401
 # Import the live government recall tool you created in fetch_recalls.py
-from fetch_recalls import get_live_recalls
+from fetch_recalls import get_live_recalls, recalls_available
 from fetch_marketcheck import MarketCheckError, get_market_snapshot
 from openai_client import create_openai_client
 
@@ -17,64 +18,106 @@ if hasattr(sys.stdout, "reconfigure"):
 client = create_openai_client()
 
 _VEHICLES_DB: dict | None = None
-_VEHICLES_DB_PATH = "vehicles.json"
+_VEHICLES_DB_PATH = str(Path(__file__).resolve().parent / "vehicles.json")
 
 
-def _load_vehicles_db(json_file: str = _VEHICLES_DB_PATH) -> dict | None:
+def _load_vehicles_db(json_file: str | None = None) -> dict | None:
     global _VEHICLES_DB
-    if _VEHICLES_DB is not None:
+    path = str(Path(json_file or _VEHICLES_DB_PATH).resolve())
+    if _VEHICLES_DB is not None and path == str(Path(_VEHICLES_DB_PATH).resolve()):
         return _VEHICLES_DB
     try:
-        with open(json_file, "r", encoding="utf-8") as f:
-            _VEHICLES_DB = json.load(f)
-        return _VEHICLES_DB
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
     except FileNotFoundError:
         return None
+    if path == str(Path(_VEHICLES_DB_PATH).resolve()):
+        _VEHICLES_DB = data
+    return data
 
 
-def verify_vehicle_exists(make, year, model, json_file="vehicles.json"):
+def _match_key(candidate: str, options) -> str | None:
+    needle = str(candidate or "").strip().lower()
+    if not needle:
+        return None
+    for option in options:
+        if str(option).strip().lower() == needle:
+            return str(option)
+    return None
+
+
+def verify_vehicle_exists(make, year, model, json_file=None):
     """
     Checks your local database to ensure the requested vehicle is real.
     Prevents the AI from processing fake or hallucinated vehicle data.
+
+    Returns:
+        (is_valid, message, canonical_make, canonical_model)
     """
     vehicles_db = _load_vehicles_db(json_file)
     if vehicles_db is None:
-        return False, f"Error: '{json_file}' database file not found. Run core_makes_models.py first.", None
+        db_name = json_file or "vehicles.json"
+        return (
+            False,
+            f"Error: '{db_name}' database file not found. Run core_makes_models.py first.",
+            None,
+            None,
+        )
 
-    if make not in vehicles_db:
-        return False, f"Brand '{make}' is not in our database.", None
+    canonical_make = _match_key(make, vehicles_db)
+    if canonical_make is None:
+        return False, f"Brand '{make}' is not in our database.", None, None
 
-    if str(year) not in vehicles_db[make]:
-        return False, f"No data found for a {year} {make}.", None
+    year_key = str(year).strip()
+    if year_key not in vehicles_db[canonical_make]:
+        return False, f"No data found for a {year} {canonical_make}.", None, None
 
-    models = vehicles_db[make][str(year)]
-    if model in models:
-        return True, "Vehicle successfully verified.", model
-    if model.title() in models:
-        return True, "Vehicle successfully verified.", model.title()
+    models = vehicles_db[canonical_make][year_key]
+    canonical_model = _match_key(model, models)
+    if canonical_model is None:
+        return (
+            False,
+            f"Model '{model}' was not found for a {year} {canonical_make}.",
+            None,
+            None,
+        )
 
-    return False, f"Model '{model}' was not found for a {year} {make}.", None
+    return True, "Vehicle successfully verified.", canonical_make, canonical_model
+
 
 def generate_ai_vehicle_report(make, year, model, zip_code=None, vehicle_profile=None):
     """
     Verifies a car, fetches real-time federal data, and passes it to OpenAI.
     """
     # 1. First, check our local guardrail database to prevent AI hallucinations
-    is_valid, message, canonical_model = verify_vehicle_exists(make, year, model)
+    is_valid, message, canonical_make, canonical_model = verify_vehicle_exists(
+        make, year, model
+    )
     if not is_valid:
         return f"Error: {message}"
 
-    print(f"🤖 AI Core: Gathering live metrics for verified vehicle: {year} {make} {canonical_model}...")
+    print(
+        "🤖 AI Core: Gathering live metrics for verified vehicle: "
+        f"{year} {canonical_make} {canonical_model}..."
+    )
 
     # 2. Call your fetch_recalls script to get actual, real-time government entries
-    live_structural_data = get_live_recalls(make, year, canonical_model)
+    live_structural_data = get_live_recalls(canonical_make, year, canonical_model)
+    if not recalls_available(live_structural_data):
+        live_structural_data = {
+            **live_structural_data,
+            "note": (
+                "NHTSA recall lookup failed or timed out. Do not claim there are zero "
+                "recalls. State that recall data is temporarily unavailable."
+            ),
+        }
 
     market_data = None
     market_note = "MarketCheck listing data not requested."
     if zip_code:
         try:
             market_data = get_market_snapshot(
-                make=make,
+                make=canonical_make,
                 model=canonical_model,
                 year=year,
                 zip_code=zip_code,
@@ -100,7 +143,7 @@ def generate_ai_vehicle_report(make, year, model, zip_code=None, vehicle_profile
     user_prompt = f"""
     Please analyze and perform a complete safety and purchasing risk analysis for the following automotive profile data:
     
-    Vehicle: {year} {make} {canonical_model}
+    Vehicle: {year} {canonical_make} {canonical_model}
     Buyer Vehicle Profile: {profile_block}
     Market Data Status: {market_note}
     Raw Sourced Recalls Data: {json.dumps(live_structural_data, indent=2)}
@@ -110,10 +153,10 @@ def generate_ai_vehicle_report(make, year, model, zip_code=None, vehicle_profile
 
     ### 📊 VEHICLE RISK PROFILE
     * **Risk Classification:** [Classify as LOW RISK, MEDIUM RISK, or HIGH RISK based on the severity/volume of defects]
-    * **Total Active Recalls:** [Insert total count]
+    * **Total Active Recalls:** [Insert total count, or 'Unavailable' if recall lookup failed]
 
     ### ⚠️ CRITICAL DEFECT BREAKDOWN
-    [Provide a short, punchy bulleted list summarizing the most dangerous mechanical failures found in the data. Bold the affected component name. If zero recalls exist, state: 'No active safety recalls recorded for this model year.']
+    [Provide a short, punchy bulleted list summarizing the most dangerous mechanical failures found in the data. Bold the affected component name. If zero recalls exist, state: 'No active safety recalls recorded for this model year.' If recall data is unavailable, state that clearly and do not invent a zero-recall result.]
 
     ### 🛒 CURRENT MARKET SNAPSHOT
     [If market data exists, summarize how many listings were found, typical price/mileage range, and call out 2-3 specific listings with price vs predicted fair value when available. If no market data, state that clearly.]
@@ -166,11 +209,9 @@ if __name__ == "__main__":
             
         print("\n---------------------------------------------")
         
-        # 2. Check local guardrails to ensure the inputs are accurate and properly cased
-        # We title() the inputs to match our JSON keys (e.g. "honda" becomes "Honda")
-        formatted_make = input_make.title() if input_make.lower() not in ["bmw", "gmc", "byd"] else input_make.upper()
-        
-        is_valid, validation_message, canonical_model = verify_vehicle_exists(formatted_make, input_year, input_model)
+        is_valid, validation_message, canonical_make, canonical_model = verify_vehicle_exists(
+            input_make, input_year, input_model
+        )
         
         if not is_valid:
             print(f"❌ Validation Error: {validation_message}")
@@ -180,8 +221,8 @@ if __name__ == "__main__":
         # 3. If passed, execute the live API query and the AI compilation
         try:
             report = generate_ai_vehicle_report(
-                make=formatted_make, 
-                year=int(input_year), 
+                make=canonical_make,
+                year=int(input_year),
                 model=canonical_model,
                 zip_code=input_zip or None,
             )

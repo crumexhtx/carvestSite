@@ -32,6 +32,8 @@ export function BuyerReportView({
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let attempts = 0;
+    let transientErrors = 0;
+    const maxAttempts = 40;
 
     async function load() {
       try {
@@ -39,17 +41,27 @@ export function BuyerReportView({
         if (cancelled) return;
         setReport(result);
         setError(null);
+        transientErrors = 0;
         attempts += 1;
-        if (
-          ["pending_payment", "paid", "generating"].includes(result.status) &&
-          attempts < 40
-        ) {
+        const stillBuilding = ["pending_payment", "paid", "generating"].includes(
+          result.status,
+        );
+        if (stillBuilding && attempts < maxAttempts) {
           timer = setTimeout(load, 3000);
+        } else if (stillBuilding) {
+          setError(
+            "This report is taking longer than expected. Refresh this page in a minute, or contact support if it stays stuck.",
+          );
         }
       } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Could not load this report.");
+        if (cancelled) return;
+        transientErrors += 1;
+        // Keep polling through brief network blips while the report is generating.
+        if (transientErrors <= 3 && attempts < maxAttempts) {
+          timer = setTimeout(load, 3000);
+          return;
         }
+        setError(err instanceof Error ? err.message : "Could not load this report.");
       }
     }
 

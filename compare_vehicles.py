@@ -59,7 +59,9 @@ def gather_vehicle_intel(
     max_listings: int = 5,
     max_price_predictions: int = 1,
 ) -> dict[str, Any]:
-    is_valid, message, canonical_model = verify_vehicle_exists(make, year, model)
+    is_valid, message, canonical_make, canonical_model = verify_vehicle_exists(
+        make, year, model
+    )
     if not is_valid:
         return {
             "role": role,
@@ -71,18 +73,18 @@ def gather_vehicle_intel(
         }
 
     print(
-        f"Gathering intel for {role}: {year} {make} {canonical_model}...",
+        f"Gathering intel for {role}: {year} {canonical_make} {canonical_model}...",
         flush=True,
     )
 
-    recalls = get_live_recalls(make, year, canonical_model)
+    recalls = get_live_recalls(canonical_make, year, canonical_model)
     market_data = None
     market_error = None
 
     if zip_code:
         try:
             market_data = get_market_snapshot(
-                make=make,
+                make=canonical_make,
                 model=canonical_model,
                 year=year,
                 zip_code=zip_code,
@@ -94,7 +96,7 @@ def gather_vehicle_intel(
 
     return {
         "role": role,
-        "make": make,
+        "make": canonical_make,
         "model": canonical_model,
         "year": year,
         "verified": True,
@@ -173,13 +175,14 @@ def generate_comparison_report(
     competitor_limit: int = 4,
     dataset: Optional[dict[str, Any]] = None,
 ) -> str:
-    is_valid, message, canonical_model = verify_vehicle_exists(
+    is_valid, message, canonical_make, canonical_model = verify_vehicle_exists(
         profile["make"],
         int(profile["year"]),
         profile["model"],
     )
     if not is_valid:
         return f"Error: {message}"
+    profile = {**profile, "make": canonical_make, "model": canonical_model}
 
     if dataset is None:
         dataset = build_comparison_dataset(profile, competitor_limit=competitor_limit)

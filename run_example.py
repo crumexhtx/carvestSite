@@ -28,12 +28,14 @@ def run_report(profile_path: Path = DEFAULT_SAMPLE) -> str:
     model = profile["model"]
     zip_code = profile.get("zip_code")
 
-    is_valid, message, canonical_model = verify_vehicle_exists(make, year, model)
+    is_valid, message, canonical_make, canonical_model = verify_vehicle_exists(
+        make, year, model
+    )
     if not is_valid:
         raise ValueError(message)
 
     return generate_ai_vehicle_report(
-        make=make,
+        make=canonical_make,
         year=year,
         model=canonical_model,
         zip_code=zip_code,

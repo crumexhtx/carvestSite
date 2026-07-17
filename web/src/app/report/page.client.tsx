@@ -150,6 +150,9 @@ function MonetizedBuyerReportClient({ defaultVin = "" }: { defaultVin?: string }
         preview.report_id,
         preview.access_token,
       );
+      if (!result.checkout_url) {
+        throw new Error("Checkout did not return a redirect URL.");
+      }
       window.location.assign(result.checkout_url);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start checkout.");
@@ -341,7 +344,12 @@ function MonetizedBuyerReportClient({ defaultVin = "" }: { defaultVin?: string }
                 <Stat label="Mileage" value={`${formatNumber(preview.preview.mileage)} mi`} />
                 <Stat
                   label="Recall campaigns"
-                  value={String(preview.preview.recall_count)}
+                  value={
+                    preview.preview.recalls_available === false ||
+                    preview.preview.recall_count == null
+                      ? "Unavailable"
+                      : String(preview.preview.recall_count)
+                  }
                 />
               </div>
 

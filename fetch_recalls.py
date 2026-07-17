@@ -86,7 +86,8 @@ def get_live_recalls(
             )
 
         payload = {
-            "total_recalls_count": data.get("Count", 0),
+            "available": True,
+            "total_recalls_count": int(data.get("Count") or 0),
             "recalls_list": clean_recalls,
         }
         if use_cache:
@@ -97,13 +98,23 @@ def get_live_recalls(
         if verbose:
             print(f"❌ Error talking to NHTSA Recalls API: {e}")
         payload = {
-            "total_recalls_count": 0,
+            "available": False,
+            "total_recalls_count": None,
             "recalls_list": [],
             "error": str(e),
         }
         if use_cache:
             _CACHE[key] = (time.time() + RECALLS_ERROR_TTL_SECONDS, payload)
         return payload
+
+
+def recalls_available(payload: dict[str, Any] | None) -> bool:
+    """True when NHTSA returned a usable recall payload (including zero campaigns)."""
+    if not isinstance(payload, dict):
+        return False
+    if payload.get("available") is False or payload.get("error"):
+        return False
+    return True
 
 
 def get_live_recalls_many(

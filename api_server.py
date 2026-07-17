@@ -28,13 +28,14 @@ from listing_deal_service import ListingDealError, evaluate_listing_deal
 from negotiation import generate_negotiation_pack
 from offer_sheet_service import OfferSheetError, analyze_offer_sheet
 from rate_limit import ApiRateLimitMiddleware
-from report_store import ReportStoreError, update_report
+from report_store import ReportStoreError, get_report, update_report
 from stripe_service import (
     PaymentConfigurationError,
     construct_webhook_event,
     create_checkout_session,
     development_unlock_enabled,
     stripe_configured,
+    validate_checkout_session_for_report,
 )
 from vehicle_assistant import process_assistant_turn
 from vehicle_reference_image import fetch_reference_image_bytes, resolve_vehicle_photo
@@ -256,7 +257,7 @@ def list_models(make: str = Query(...), year: str = Query(...)) -> list[str]:
 @app.post("/api/search/listings")
 def search_listings(payload: VehicleQuery) -> dict:
     if payload.make and payload.model and payload.year:
-        is_valid, message, canonical_model = verify_vehicle_exists(
+        is_valid, message, canonical_make, canonical_model = verify_vehicle_exists(
             payload.make, int(payload.year), payload.model
         )
         if not is_valid:
@@ -264,7 +265,7 @@ def search_listings(payload: VehicleQuery) -> dict:
 
         try:
             return get_market_snapshot(
-                make=payload.make,
+                make=canonical_make,
                 model=canonical_model,
                 year=int(payload.year),
                 zip_code=payload.zip_code,
@@ -482,13 +483,28 @@ async def stripe_webhook(
     if event.get("type") == "checkout.session.completed":
         session = event["data"]["object"]
         report_id = (session.get("metadata") or {}).get("report_id")
-        if report_id:
-            mark_report_paid(
-                report_id,
-                stripe_session_id=session.get("id"),
-                stripe_payment_intent_id=session.get("payment_intent"),
-            )
-            background_tasks.add_task(build_full_report, report_id)
+        session_id = session.get("id")
+        if not report_id or not session_id:
+            return {"received": True}
+
+        record = get_report(report_id)
+        if not record:
+            raise HTTPException(status_code=400, detail="Unknown report for Stripe session.")
+
+        try:
+            validate_checkout_session_for_report(session, record)
+        except PaymentConfigurationError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        if record.get("status") in {"paid", "generating", "ready"}:
+            return {"received": True}
+
+        mark_report_paid(
+            report_id,
+            stripe_session_id=session_id,
+            stripe_payment_intent_id=session.get("payment_intent"),
+        )
+        background_tasks.add_task(build_full_report, report_id)
     return {"received": True}
 
 
@@ -536,13 +552,14 @@ def create_comparison(payload: VehicleQuery) -> dict:
     if not payload.zip_code:
         raise HTTPException(status_code=400, detail="zip_code is required for comparison mode.")
 
-    is_valid, message, canonical_model = verify_vehicle_exists(
+    is_valid, message, canonical_make, canonical_model = verify_vehicle_exists(
         payload.make,
         int(payload.year),
         payload.model,
     )
     if not is_valid:
         raise HTTPException(status_code=400, detail=message)
+    profile["make"] = canonical_make
     profile["model"] = canonical_model
 
     dataset = build_comparison_dataset(profile)

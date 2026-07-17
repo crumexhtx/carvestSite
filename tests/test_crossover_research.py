@@ -36,11 +36,15 @@ class CrossoverResearchTests(unittest.TestCase):
         with (
             patch(
                 "assistant_research.verify_vehicle_exists",
-                side_effect=lambda make, year, model: (True, "ok", model),
+                side_effect=lambda make, year, model: (True, "ok", make, model),
             ),
             patch(
                 "assistant_research.get_live_recalls",
-                return_value={"total_recalls_count": 0, "recalls_list": []},
+                return_value={
+                    "available": True,
+                    "total_recalls_count": 0,
+                    "recalls_list": [],
+                },
             ),
             patch("assistant_research._sample_listing", return_value={}),
             patch(
