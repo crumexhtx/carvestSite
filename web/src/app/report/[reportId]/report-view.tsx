@@ -21,8 +21,14 @@ export function BuyerReportView({
 
   useEffect(() => {
     let cancelled = false;
+    const hashToken = window.location.hash.startsWith("#token=")
+      ? decodeURIComponent(window.location.hash.slice("#token=".length))
+      : "";
     const token =
-      initialToken || sessionStorage.getItem(`carvest-report-${reportId}`) || "";
+      initialToken ||
+      hashToken ||
+      sessionStorage.getItem(`carvest-report-${reportId}`) ||
+      "";
     if (!token) {
       queueMicrotask(() => {
         if (!cancelled) {
@@ -34,6 +40,13 @@ export function BuyerReportView({
       };
     }
     sessionStorage.setItem(`carvest-report-${reportId}`, token);
+    // Drop token from the visible URL after persisting it for this tab session.
+    if (initialToken || hashToken) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("token");
+      url.hash = "";
+      window.history.replaceState({}, "", `${url.pathname}${url.search}`);
+    }
 
     let timer: ReturnType<typeof setTimeout> | undefined;
     let attempts = 0;

@@ -29,6 +29,7 @@ from listing_deal_service import ListingDealError, evaluate_listing_deal
 from negotiation import generate_negotiation_pack
 from offer_sheet_service import OfferSheetError, analyze_offer_sheet
 from email_validation import EmailValidationError, normalize_email
+from listing_trust import verify_listing_trust
 from openai_client import OpenAIConfigurationError
 from rate_limit import ApiRateLimitMiddleware
 from report_store import ReportStoreError, get_report, update_report
@@ -180,6 +181,21 @@ class NegotiationRequest(BaseModel):
     predicted_fair_price: Optional[float] = None
     listing_price: Optional[float] = None
     price_delta: Optional[float] = None
+    listing_id: Optional[str] = None
+    vdp_url: Optional[str] = None
+    trust_sig: Optional[str] = None
+
+
+class ListingTrustVerifyRequest(BaseModel):
+    listing_id: Optional[str] = None
+    vin: Optional[str] = None
+    price: Optional[float] = None
+    miles: Optional[float] = None
+    vdp_url: Optional[str] = None
+    predicted_fair_price: Optional[float] = None
+    deal_signal: Optional[str] = None
+    dealer_name: Optional[str] = None
+    trust_sig: str
 
 
 class BuyerReportPreviewRequest(BaseModel):
@@ -381,8 +397,33 @@ def inventory_scale() -> dict:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
+@app.post("/api/listings/verify-trust")
+def verify_listing_snapshot(payload: ListingTrustVerifyRequest) -> dict[str, bool]:
+    valid = verify_listing_trust(**payload.model_dump())
+    return {"valid": valid}
+
+
 @app.post("/api/negotiation")
 def create_negotiation_pack(payload: NegotiationRequest) -> dict:
+    trusted = verify_listing_trust(
+        listing_id=payload.listing_id,
+        vin=payload.vin,
+        price=payload.price,
+        miles=payload.miles,
+        vdp_url=payload.vdp_url,
+        predicted_fair_price=payload.predicted_fair_price,
+        deal_signal=payload.deal_signal,
+        dealer_name=payload.dealer_name,
+        trust_sig=payload.trust_sig,
+    )
+    if not trusted:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "This listing snapshot could not be verified. Return to search results "
+                "and open the vehicle again."
+            ),
+        )
     try:
         listing = payload.model_dump()
         if payload.predicted_fair_price is not None:
@@ -524,7 +565,7 @@ def checkout_buyer_report(
             return {
                 "checkout_url": (
                     f"{frontend_url}/report/{report_id}"
-                    f"?token={quote(payload.access_token)}"
+                    f"#token={quote(payload.access_token)}"
                 ),
                 "development_unlocked": development_unlock_enabled(),
             }
@@ -535,7 +576,7 @@ def checkout_buyer_report(
             return {
                 "checkout_url": (
                     f"{frontend_url}/report/{report_id}"
-                    f"?token={quote(payload.access_token)}&checkout=development"
+                    f"?checkout=development#token={quote(payload.access_token)}"
                 ),
                 "development_unlocked": True,
             }

@@ -32,6 +32,7 @@ export type Listing = {
   primary_photo?: string;
   photo_count?: number;
   dom?: number;
+  trust_sig?: string;
   price_analysis?: {
     predicted_fair_price?: number;
     listing_price?: number;
@@ -435,8 +436,28 @@ export function generateNegotiationPack(payload: {
   predicted_fair_price?: number;
   listing_price?: number;
   price_delta?: number;
+  listing_id?: string;
+  vdp_url?: string;
+  trust_sig?: string;
 }) {
   return apiFetch<NegotiationPack>("/api/negotiation", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function verifyListingTrust(payload: {
+  listing_id?: string;
+  vin?: string;
+  price?: number;
+  miles?: number;
+  vdp_url?: string;
+  predicted_fair_price?: number;
+  deal_signal?: string;
+  dealer_name?: string;
+  trust_sig: string;
+}) {
+  return apiFetch<{ valid: boolean }>("/api/listings/verify-trust", {
     method: "POST",
     body: JSON.stringify(payload),
   });

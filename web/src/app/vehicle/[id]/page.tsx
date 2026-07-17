@@ -39,6 +39,8 @@ export default async function VehicleDetailPage({ searchParams, params }: Vehicl
       year={num("year")}
       fairPrice={num("fair")}
       priceDelta={num("delta")}
+      listingId={get("listing_id") || routeParams.id}
+      trustSig={get("trust_sig")}
     />
   );
 }

@@ -22,6 +22,10 @@ services:
         value: "false"
       - key: API_RATE_LIMIT_ENABLED
         value: "true"
+      - key: API_RATE_LIMIT_BACKEND
+        value: auto
+      - key: LISTING_TRUST_SECRET
+        sync: false
       - key: MARKETCHECK_TIMEOUT_SECONDS
         value: "12"
       - key: MARKETCHECK_MAX_RETRIES

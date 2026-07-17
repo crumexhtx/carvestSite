@@ -7,6 +7,7 @@ import env_setup  # noqa: F401
 import requests
 
 from cache_backend import build_cache_key, get_json, set_json
+from listing_trust import attach_listing_trust
 
 if hasattr(sys.stdout, "reconfigure"):
     try:
@@ -156,7 +157,10 @@ def search_active_listings(
 
     print(f"Searching MarketCheck listings for {year} {make} {model}...", flush=True)
     data = _request("/search/car/active", params)
-    listings = [normalize_listing(item) for item in data.get("listings", [])]
+    listings = [
+        attach_listing_trust(normalize_listing(item))
+        for item in data.get("listings", [])
+    ]
 
     return {
         "total_found": data.get("num_found", len(listings)),
@@ -460,6 +464,7 @@ def search_by_criteria(
                 zip_code=active_criteria["zip_code"],
                 max_predictions=min(max_price_predictions, len(listings)),
             )
+        listings = [attach_listing_trust(item) for item in listings]
 
         return {
             "total_found": data.get("num_found", len(listings)),
@@ -534,6 +539,9 @@ def get_market_snapshot(
             zip_code=zip_code,
             max_predictions=max_price_predictions,
         )
+        snapshot["listings"] = [
+            attach_listing_trust(item) for item in snapshot["listings"]
+        ]
 
     return snapshot
 

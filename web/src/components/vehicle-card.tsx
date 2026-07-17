@@ -39,6 +39,8 @@ export function VehicleCard({
       year: String(criteria?.year ?? ""),
       fair: String(listing.price_analysis?.predicted_fair_price ?? ""),
       delta: String(listing.price_analysis?.price_delta ?? ""),
+      listing_id: listing.listing_id ?? "",
+      trust_sig: listing.trust_sig ?? "",
     },
   ).toString()}`;
 
